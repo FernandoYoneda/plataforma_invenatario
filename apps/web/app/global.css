@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import "tailwindcss";
+
+:root {
+  --bg: #0b0f14;
+  --card: #111827;
+  --border: #1f2937;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}

@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  OPERADOR
+  CONSULTA
+}
+
+enum AssetType {
+  DESKTOP
+  NOTEBOOK
+  MONITOR
+  MOUSE
+  TECLADO
+  OUTRO
+}
+
+enum AssetStatus {
+  EM_USO
+  ESTOQUE
+  MANUTENCAO
+  BAIXADO
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(OPERADOR)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assetsCreated Asset[] @relation("AssetsCreatedBy")
+}
+
+model Counter {
+  key        String   @id
+  nextNumber Int
+  updatedAt  DateTime @updatedAt
+}
+
+model Asset {
+  id           String      @id @default(uuid())
+  internalCode String      @unique
+  type         AssetType
+  brand        String
+  model        String?
+  serialNumber String?
+  valueCents   Int?
+  status       AssetStatus @default(ESTOQUE)
+  registeredAt DateTime    @default(now())
+  notes        String?
+
+  createdById String?
+  createdBy   User?   @relation("AssetsCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
