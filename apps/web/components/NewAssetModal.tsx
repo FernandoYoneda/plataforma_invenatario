@@ -55,7 +55,6 @@ export default function NewAssetModal({
     setMounted(true);
   }, []);
 
-  // ✅ trava/destrava scroll quando abre/fecha
   useEffect(() => {
     if (open) document.body.style.overflow = "hidden";
     else document.body.style.overflow = "";
@@ -65,7 +64,6 @@ export default function NewAssetModal({
     };
   }, [open]);
 
-  // ✅ ESC fecha o modal
   useEffect(() => {
     if (!open) return;
 
@@ -307,7 +305,7 @@ export default function NewAssetModal({
               </div>
             </div>
           </div>,
-          document.body
+          document.body,
         )}
     </>
   );

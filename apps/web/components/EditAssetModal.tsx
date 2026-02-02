@@ -57,7 +57,20 @@ export default function EditAssetModal({ asset }: { asset: Asset }) {
   const [status, setStatus] = useState<AssetStatus>(asset.status);
   const [valueBRL, setValueBRL] = useState(centsToBRLInput(asset.valueCents));
   const [notes, setNotes] = useState(asset.notes ?? "");
-  // trava o scroll da página quando o modal está aberto
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (open) document.body.style.overflow = "hidden";
+    else document.body.style.overflow = "";
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -71,24 +84,17 @@ export default function EditAssetModal({ asset }: { asset: Asset }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, loading]);
 
-  // garante que o portal só roda no client
   useEffect(() => {
-    setMounted(true);
-  }, []);
-  // trava o scroll da página quando o modal está aberto
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
+    if (!open) return;
+
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = prev || "";
     };
   }, [open]);
 
-  // Sempre que abrir, sincroniza com o asset atual
   useEffect(() => {
     if (!open) return;
 
@@ -129,9 +135,6 @@ export default function EditAssetModal({ asset }: { asset: Asset }) {
 
     setLoading(true);
     try {
-      // Regra:
-      // - Para DESKTOP/NOTEBOOK/MONITOR: sempre manda valueCents (obrigatório)
-      // - Para outros: se vazio, NÃO manda valueCents (mantém no banco)
       const payload: {
         type: AssetType;
         brand: string;
@@ -338,7 +341,7 @@ export default function EditAssetModal({ asset }: { asset: Asset }) {
               </div>
             </div>
           </div>,
-          document.body
+          document.body,
         )}
     </>
   );

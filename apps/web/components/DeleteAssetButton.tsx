@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export default function DeleteAssetButton({
@@ -21,7 +21,7 @@ export default function DeleteAssetButton({
     if (!loading) setOpen(false);
   }
 
-  // ✅ 1) ESC para fechar
+  // Fecha com ESC
   useEffect(() => {
     if (!open) return;
 
@@ -35,20 +35,22 @@ export default function DeleteAssetButton({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, loading]);
 
-  // ✅ 2) trava o scroll quando modal está aberto
+  // Trava scroll enquanto o modal estiver aberto
   useEffect(() => {
-    if (open) document.body.style.overflow = "hidden";
-    else document.body.style.overflow = "";
+    if (!open) return;
+
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = prev || "";
     };
   }, [open]);
 
   async function handleDelete() {
     if (!id) {
       toast.error(
-        "ID do ativo está vazio (undefined). Verifique o prop do botão."
+        "ID do ativo está vazio (undefined). Verifique o prop do botão.",
       );
       return;
     }
@@ -94,13 +96,15 @@ export default function DeleteAssetButton({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[99999]">
-          <div className="absolute inset-0 bg-black/70" onClick={close} />
+        <div className="fixed inset-0 z-[99999]" onClick={close}>
+          {/* overlay */}
+          <div className="absolute inset-0 bg-black/70" />
 
+          {/* container */}
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div
+              className="w-full max-w-md overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-xl overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
             >
               <div className="border-b border-[var(--border)] px-4 py-3">
                 <h2 className="text-base font-semibold">Confirmar exclusão</h2>

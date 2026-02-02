@@ -1,7 +1,7 @@
 import Link from "next/link";
 import EditAssetModal from "../../../components/EditAssetModal";
-import type { Asset } from "@/lib/types";
 import DeleteAssetButton from "../../../components/DeleteAssetButton";
+import type { Asset } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,23 @@ function statusBadge(status: string) {
 async function fetchAsset(id: string): Promise<Asset> {
   const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002";
   const res = await fetch(`${base}/assets/${id}`, { cache: "no-store" });
-  if (!res.ok) throw new Error("Falha ao buscar ativo");
+
+  if (!res.ok) {
+    // tenta ler mensagem do backend (JSON)
+    let msg = `Falha ao buscar ativo (HTTP ${res.status})`;
+    try {
+      const maybe = await res.json();
+      if (maybe?.message) {
+        msg = Array.isArray(maybe.message)
+          ? maybe.message.join(", ")
+          : String(maybe.message);
+      }
+    } catch {
+      // ignora se não for JSON
+    }
+    throw new Error(msg);
+  }
+
   return res.json();
 }
 
@@ -38,9 +54,18 @@ export default async function AssetDetails({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const asset = await fetchAsset(id);
-  console.log("ASSET DEBUG:", asset);
-  console.log("ASSET ID:", asset.id);
+
+  let result: { ok: true } | { ok: false; error: string };
+  let asset: Asset | null = null;
+
+  try {
+    asset = await fetchAsset(id);
+    result = { ok: true };
+  } catch (e: unknown) {
+    const msg =
+      e instanceof Error ? e.message : "Erro desconhecido ao buscar ativo.";
+    result = { ok: false, error: msg };
+  }
 
   return (
     <main className="min-h-screen">
@@ -53,63 +78,106 @@ export default async function AssetDetails({
             ← Voltar
           </Link>
 
-          <EditAssetModal asset={asset} />
-          <DeleteAssetButton id={asset.id} internalCode={asset.internalCode} />
+          {result.ok && asset && (
+            <>
+              {/* ✅ agora tipa certo, sem any */}
+              <EditAssetModal asset={asset} />
 
-          <div className="ml-auto text-sm text-[var(--muted)]">
-            {asset.internalCode}
-          </div>
+              <DeleteAssetButton
+                id={asset.id}
+                internalCode={asset.internalCode}
+              />
+
+              <div className="ml-auto text-sm text-[var(--muted)]">
+                {asset.internalCode}
+              </div>
+            </>
+          )}
         </div>
       </header>
 
       <section className="mx-auto max-w-4xl px-4 py-6">
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-lg font-semibold">
-                {asset.brand} {asset.model ?? ""}
-              </h1>
-              <p className="text-sm text-[var(--muted)]">
-                Tipo: <span className="text-white/90">{asset.type}</span>
-              </p>
+        {!result.ok && (
+          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm">
+            <div className="font-semibold text-rose-200">
+              Não foi possível carregar o ativo
             </div>
+            <div className="mt-1 text-rose-200/80">{result.error}</div>
 
-            <span className={statusBadge(asset.status)}>{asset.status}</span>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                href="/"
+                className="rounded-xl border border-rose-500/30 bg-rose-500/15 px-3 py-2 text-sm text-rose-100 hover:bg-rose-500/20"
+              >
+                Voltar para lista
+              </Link>
+
+              <a
+                href={
+                  (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002") +
+                  `/assets/${id}`
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-xl border border-[var(--border)] bg-white/10 px-3 py-2 text-sm hover:bg-white/15"
+              >
+                Abrir API (/assets/{id})
+              </a>
+            </div>
           </div>
+        )}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
-              <div className="text-xs text-[var(--muted)]">Código interno</div>
-              <div className="mt-1 font-medium">{asset.internalCode}</div>
+        {result.ok && asset && (
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-lg font-semibold">
+                  {asset.brand} {asset.model ?? ""}
+                </h1>
+                <p className="text-sm text-[var(--muted)]">
+                  Tipo: <span className="text-white/90">{asset.type}</span>
+                </p>
+              </div>
+
+              <span className={statusBadge(asset.status)}>{asset.status}</span>
             </div>
 
-            <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
-              <div className="text-xs text-[var(--muted)]">Valor</div>
-              <div className="mt-1 font-medium">
-                {moneyBRL(asset.valueCents)}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
+                <div className="text-xs text-[var(--muted)]">
+                  Código interno
+                </div>
+                <div className="mt-1 font-medium">{asset.internalCode}</div>
+              </div>
+
+              <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
+                <div className="text-xs text-[var(--muted)]">Valor</div>
+                <div className="mt-1 font-medium">
+                  {moneyBRL(asset.valueCents)}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
+                <div className="text-xs text-[var(--muted)]">Serial</div>
+                <div className="mt-1 font-medium">
+                  {asset.serialNumber ?? "-"}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
+                <div className="text-xs text-[var(--muted)]">Registrado em</div>
+                <div className="mt-1 font-medium">
+                  {new Date(asset.registeredAt).toLocaleString("pt-BR")}
+                </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
-              <div className="text-xs text-[var(--muted)]">Serial</div>
-              <div className="mt-1 font-medium">
-                {asset.serialNumber ?? "-"}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
-              <div className="text-xs text-[var(--muted)]">Registrado em</div>
-              <div className="mt-1 font-medium">
-                {new Date(asset.registeredAt).toLocaleString("pt-BR")}
-              </div>
+            <div className="mt-4 rounded-xl border border-[var(--border)] bg-white/5 p-3">
+              <div className="text-xs text-[var(--muted)]">Observações</div>
+              <div className="mt-1 text-sm">{asset.notes ?? "-"}</div>
             </div>
           </div>
-
-          <div className="mt-4 rounded-xl border border-[var(--border)] bg-white/5 p-3">
-            <div className="text-xs text-[var(--muted)]">Observações</div>
-            <div className="mt-1 text-sm">{asset.notes ?? "-"}</div>
-          </div>
-        </div>
+        )}
       </section>
     </main>
   );
