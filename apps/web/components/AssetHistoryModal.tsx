@@ -11,6 +11,16 @@ function formatDate(value?: string | null) {
   return new Date(value).toLocaleString("pt-BR");
 }
 
+function HistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
 export default function AssetHistoryModal({
   asset,
   refreshKey,
@@ -83,19 +93,17 @@ export default function AssetHistoryModal({
 
   const modal = (
     <div className="fixed inset-0 z-[99999]" onClick={() => setOpen(false)}>
-      <div className="absolute inset-0 bg-[#1f2937]/65 backdrop-blur-[2px]" />
+      <div className="absolute inset-0 bg-[rgba(23,58,67,0.66)] backdrop-blur-[3px]" />
 
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
-          className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.22)]"
+          className="glass-panel w-full max-w-3xl overflow-hidden rounded-[30px]"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex items-center justify-between border-b border-black/10 px-6 py-5">
+          <div className="flex items-center justify-between border-b px-6 py-5 [border-color:var(--border-soft)]">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8c5f46]">
-                Historico
-              </p>
-              <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[#1f2937]">
+              <p className="eyebrow">Historico</p>
+              <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
                 {asset.internalCode}
               </h2>
             </div>
@@ -103,7 +111,7 @@ export default function AssetHistoryModal({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded-2xl border border-[#d7d4cd] px-3 py-2 text-sm text-[#6b7280] transition hover:bg-[#f9f5ef]"
+              className="btn-secondary px-3 py-2 text-sm"
             >
               Fechar
             </button>
@@ -111,13 +119,15 @@ export default function AssetHistoryModal({
 
           <div className="max-h-[70vh] overflow-auto px-6 py-5">
             {error ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <div className="status-banner-error rounded-[22px] px-4 py-3 text-sm">
                 {error}
               </div>
             ) : loading ? (
-              <div className="text-sm text-[#6b7280]">Carregando historico...</div>
+              <div className="text-sm [color:var(--text-secondary)]">
+                Carregando historico...
+              </div>
             ) : history.length === 0 ? (
-              <div className="rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-4 text-sm text-[#6b7280]">
+              <div className="surface-soft rounded-[24px] px-4 py-4 text-sm [color:var(--text-secondary)]">
                 Este asset ainda nao possui atribuicoes registradas.
               </div>
             ) : (
@@ -125,28 +135,28 @@ export default function AssetHistoryModal({
                 {history.map((assignment) => (
                   <div
                     key={assignment.id}
-                    className="rounded-2xl border border-black/10 bg-[#fcfaf7] px-4 py-4"
+                    className="surface-soft rounded-[24px] px-4 py-4"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <div className="font-medium text-[#111827]">
+                        <div className="font-medium [color:var(--text-primary)]">
                           {assignment.employee?.name ?? assignment.employeeId}
                         </div>
-                        <div className="mt-1 text-sm text-[#6b7280]">
+                        <div className="mt-1 text-sm [color:var(--text-secondary)]">
                           {assignment.employee?.email ?? "Sem email"}
                         </div>
                       </div>
-                      <div className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-medium text-[#374151]">
+                      <div className="status-pill">
                         {assignment.returnedAt ? "Devolvido" : "Ativo"}
                       </div>
                     </div>
 
-                    <div className="mt-3 grid gap-2 text-sm text-[#374151] sm:grid-cols-2">
+                    <div className="mt-3 grid gap-2 text-sm [color:var(--text-secondary)] sm:grid-cols-2">
                       <div>Atribuido em: {formatDate(assignment.assignedAt)}</div>
                       <div>Devolvido em: {formatDate(assignment.returnedAt)}</div>
                     </div>
 
-                    <div className="mt-3 text-sm text-[#374151]">
+                    <div className="mt-3 text-sm [color:var(--text-secondary)]">
                       Observacoes: {assignment.notes ?? "-"}
                     </div>
                   </div>
@@ -164,8 +174,9 @@ export default function AssetHistoryModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-xl border border-[#d7d4cd] bg-white px-3 py-2 text-sm font-medium text-[#374151] transition hover:bg-[#f9f5ef]"
+        className="action-button"
       >
+        <HistoryIcon />
         Historico
       </button>
 

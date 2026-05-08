@@ -234,19 +234,17 @@ export default function NewAssetModal({
 
   const modal = (
     <div className="fixed inset-0 z-[99999]" onClick={close}>
-      <div className="absolute inset-0 bg-[#1f2937]/65 backdrop-blur-[2px]" />
+      <div className="absolute inset-0 bg-[rgba(23,58,67,0.66)] backdrop-blur-[3px]" />
 
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
-          className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.22)]"
+          className="glass-panel w-full max-w-2xl overflow-hidden rounded-[30px]"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex items-center justify-between border-b border-black/10 px-6 py-5">
+          <div className="flex items-center justify-between border-b px-6 py-5 [border-color:var(--border-soft)]">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8c5f46]">
-                Cadastro
-              </p>
-              <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[#1f2937]">
+              <p className="eyebrow">Cadastro</p>
+              <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
                 Novo Asset
               </h2>
             </div>
@@ -255,7 +253,7 @@ export default function NewAssetModal({
               type="button"
               onClick={close}
               disabled={loading}
-              className="rounded-2xl border border-[#d7d4cd] px-3 py-2 text-sm text-[#6b7280] transition hover:bg-[#f9f5ef] disabled:opacity-50"
+              className="btn-secondary px-3 py-2 text-sm disabled:opacity-50"
             >
               Fechar
             </button>
@@ -265,11 +263,13 @@ export default function NewAssetModal({
             <div className="max-h-[75vh] overflow-auto px-6 py-5">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="text-sm">
-                  <span className="font-medium text-[#374151]">Tipo</span>
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Tipo
+                  </span>
                   <select
                     value={type}
                     onChange={(event) => setType(event.target.value as AssetType)}
-                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    className="brand-input mt-1.5"
                   >
                     {TYPES.map((item) => (
                       <option key={item.value} value={item.value}>
@@ -280,13 +280,15 @@ export default function NewAssetModal({
                 </label>
 
                 <label className="text-sm">
-                  <span className="font-medium text-[#374151]">Status</span>
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Status
+                  </span>
                   <select
                     value={status}
                     onChange={(event) =>
                       setStatus(event.target.value as AssetStatus)
                     }
-                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    className="brand-input mt-1.5"
                   >
                     {STATUS.map((item) => (
                       <option key={item.value} value={item.value}>
@@ -297,12 +299,14 @@ export default function NewAssetModal({
                 </label>
 
                 <label className="text-sm">
-                  <span className="font-medium text-[#374151]">Categoria</span>
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Categoria
+                  </span>
                   <select
                     value={categoryId}
                     onChange={(event) => setCategoryId(event.target.value)}
                     disabled={loadingReferences}
-                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    className="brand-input mt-1.5 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <option value="">
                       {loadingReferences
@@ -318,12 +322,14 @@ export default function NewAssetModal({
                 </label>
 
                 <label className="text-sm">
-                  <span className="font-medium text-[#374151]">Localizacao</span>
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Localizacao
+                  </span>
                   <select
                     value={locationId}
                     onChange={(event) => setLocationId(event.target.value)}
                     disabled={loadingReferences}
-                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    className="brand-input mt-1.5 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <option value="">
                       {loadingReferences
@@ -339,54 +345,62 @@ export default function NewAssetModal({
                 </label>
 
                 <label className="text-sm">
-                  <span className="font-medium text-[#374151]">Marca *</span>
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Marca *
+                  </span>
                   <input
                     ref={brandInputRef}
                     value={brand}
                     onChange={(event) => setBrand(event.target.value)}
-                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    className="brand-input mt-1.5"
                     placeholder="Dell, LG, Logitech..."
                   />
                 </label>
 
                 <label className="text-sm">
-                  <span className="font-medium text-[#374151]">Modelo</span>
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Modelo
+                  </span>
                   <input
                     value={model}
                     onChange={(event) => setModel(event.target.value)}
-                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    className="brand-input mt-1.5"
                     placeholder="Latitude 5420, UltraSharp..."
                   />
                 </label>
 
                 <label className="text-sm">
-                  <span className="font-medium text-[#374151]">Serial</span>
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Serial
+                  </span>
                   <input
                     value={serialNumber}
                     onChange={(event) => setSerialNumber(event.target.value)}
-                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    className="brand-input mt-1.5"
                     placeholder="ABC123456"
                   />
                 </label>
 
                 <label className="text-sm">
-                  <span className="font-medium text-[#374151]">
+                  <span className="font-medium [color:var(--text-primary)]">
                     Valor {needsValue ? "*" : "(opcional)"} (R$)
                   </span>
                   <input
                     value={valueBRL}
                     onChange={(event) => setValueBRL(event.target.value)}
-                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    className="brand-input mt-1.5"
                     placeholder="3500,00"
                   />
                 </label>
 
                 <label className="text-sm sm:col-span-2">
-                  <span className="font-medium text-[#374151]">Observacoes</span>
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Observacoes
+                  </span>
                   <textarea
                     value={notes}
                     onChange={(event) => setNotes(event.target.value)}
-                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    className="brand-input mt-1.5"
                     rows={4}
                     placeholder="Observacoes opcionais sobre o asset."
                   />
@@ -394,30 +408,30 @@ export default function NewAssetModal({
               </div>
 
               {error && (
-                <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                <div className="status-banner-error mt-4 rounded-[22px] px-4 py-3 text-sm">
                   {error}
                 </div>
               )}
 
               {referencesError && (
-                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="status-banner-warning mt-4 rounded-[22px] px-4 py-3 text-sm">
                   {referencesError}
                 </div>
               )}
 
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <div className="status-banner-warning mt-4 rounded-[22px] px-4 py-3 text-sm">
                 {needsValue
                   ? "Para Desktop, Notebook e Monitor, o valor e obrigatorio."
                   : "Para este tipo, o valor pode ficar vazio."}
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-black/10 px-6 py-5">
+            <div className="flex justify-end gap-3 border-t px-6 py-5 [border-color:var(--border-soft)]">
               <button
                 type="button"
                 onClick={close}
                 disabled={loading}
-                className="rounded-2xl border border-[#d7d4cd] bg-white px-4 py-3 text-sm font-medium text-[#374151] transition hover:bg-[#f9f5ef] disabled:opacity-50"
+                className="btn-secondary px-4 py-3 text-sm disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -425,7 +439,7 @@ export default function NewAssetModal({
               <button
                 type="submit"
                 disabled={loading}
-                className="rounded-2xl bg-[#8c5f46] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+                className="btn-primary px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {loading ? "Criando..." : "Criar asset"}
               </button>
@@ -444,7 +458,7 @@ export default function NewAssetModal({
           setError(null);
           setOpen(true);
         }}
-        className="rounded-2xl bg-[#8c5f46] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105"
+        className="btn-primary px-4 py-2.5 text-sm"
       >
         Novo Asset
       </button>

@@ -7,6 +7,16 @@ import { createAssignment, getEmployees } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import type { Asset, Assignment, Employee } from "@/lib/types";
 
+function AssignIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M8 12h8" />
+      <path d="M12 8v8" />
+      <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
+    </svg>
+  );
+}
+
 export default function AssignAssetModal({
   asset,
   onAssigned,
@@ -148,19 +158,17 @@ export default function AssignAssetModal({
 
   const modal = (
     <div className="fixed inset-0 z-[99999]" onClick={close}>
-      <div className="absolute inset-0 bg-[#1f2937]/65 backdrop-blur-[2px]" />
+      <div className="absolute inset-0 bg-[rgba(23,58,67,0.66)] backdrop-blur-[3px]" />
 
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
-          className="w-full max-w-xl overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.22)]"
+          className="glass-panel w-full max-w-xl overflow-hidden rounded-[30px]"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex items-center justify-between border-b border-black/10 px-6 py-5">
+          <div className="flex items-center justify-between border-b px-6 py-5 [border-color:var(--border-soft)]">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8c5f46]">
-                Atribuicao
-              </p>
-              <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[#1f2937]">
+              <p className="eyebrow">Atribuicao</p>
+              <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
                 Atribuir {asset.internalCode}
               </h2>
             </div>
@@ -169,7 +177,7 @@ export default function AssignAssetModal({
               type="button"
               onClick={close}
               disabled={loadingSubmit}
-              className="rounded-2xl border border-[#d7d4cd] px-3 py-2 text-sm text-[#6b7280] transition hover:bg-[#f9f5ef] disabled:opacity-50"
+              className="btn-secondary px-3 py-2 text-sm disabled:opacity-50"
             >
               Fechar
             </button>
@@ -177,22 +185,24 @@ export default function AssignAssetModal({
 
           <form onSubmit={handleSubmit}>
             <div className="space-y-4 px-6 py-5">
-              <div className="rounded-2xl border border-black/10 bg-[#fcfaf7] px-4 py-3 text-sm text-[#374151]">
-                <div className="font-medium text-[#111827]">
+              <div className="surface-soft rounded-[24px] px-4 py-3 text-sm [color:var(--text-secondary)]">
+                <div className="font-medium [color:var(--text-primary)]">
                   {asset.brand} {asset.model ?? ""}
                 </div>
-                <div className="mt-1 text-[#6b7280]">
-                  {asset.type} • {asset.serialNumber ?? "Sem serial"}
+                <div className="mt-1">
+                  {asset.type} | {asset.serialNumber ?? "Sem serial"}
                 </div>
               </div>
 
               <label className="block text-sm">
-                <span className="font-medium text-[#374151]">Funcionario</span>
+                <span className="font-medium [color:var(--text-primary)]">
+                  Funcionario
+                </span>
                 <select
                   value={employeeId}
                   onChange={(event) => setEmployeeId(event.target.value)}
                   disabled={loadingEmployees || employees.length === 0}
-                  className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                  className="brand-input mt-1.5 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   <option value="">
                     {loadingEmployees
@@ -210,36 +220,38 @@ export default function AssignAssetModal({
               </label>
 
               {selectedEmployee && (
-                <div className="rounded-2xl border border-black/10 bg-[#f9f5ef] px-4 py-3 text-sm text-[#374151]">
-                  <div className="font-medium text-[#111827]">
+                <div className="surface-soft rounded-[24px] px-4 py-3 text-sm [color:var(--text-secondary)]">
+                  <div className="font-medium [color:var(--text-primary)]">
                     {selectedEmployee.name}
                   </div>
                   <div className="mt-1">
-                    {selectedEmployee.department ?? "Sem departamento"} •{" "}
+                    {selectedEmployee.department ?? "Sem departamento"} |{" "}
                     {selectedEmployee.position ?? "Sem cargo"}
                   </div>
                 </div>
               )}
 
               <label className="block text-sm">
-                <span className="font-medium text-[#374151]">Observacoes</span>
+                <span className="font-medium [color:var(--text-primary)]">
+                  Observacoes
+                </span>
                 <textarea
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   rows={4}
-                  className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                  className="brand-input mt-1.5"
                   placeholder="Observacoes opcionais da atribuicao."
                 />
               </label>
 
               {employeesError && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="status-banner-warning rounded-[22px] px-4 py-3 text-sm">
                   {employeesError}
                 </div>
               )}
 
               {!loadingEmployees && employees.length === 0 && !employeesError && (
-                <div className="rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-sm text-[#6b7280]">
+                <div className="surface-soft rounded-[22px] px-4 py-3 text-sm [color:var(--text-secondary)]">
                   Nenhum funcionario cadastrado. O formulario continua disponivel,
                   mas e necessario cadastrar um funcionario no backend para criar
                   atribuicoes.
@@ -247,18 +259,18 @@ export default function AssignAssetModal({
               )}
 
               {error && (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                <div className="status-banner-error rounded-[22px] px-4 py-3 text-sm">
                   {error}
                 </div>
               )}
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-black/10 px-6 py-5">
+            <div className="flex justify-end gap-3 border-t px-6 py-5 [border-color:var(--border-soft)]">
               <button
                 type="button"
                 onClick={close}
                 disabled={loadingSubmit}
-                className="rounded-2xl border border-[#d7d4cd] bg-white px-4 py-3 text-sm font-medium text-[#374151] transition hover:bg-[#f9f5ef] disabled:opacity-50"
+                className="btn-secondary px-4 py-3 text-sm disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -266,7 +278,7 @@ export default function AssignAssetModal({
               <button
                 type="submit"
                 disabled={loadingSubmit || loadingEmployees || employees.length === 0}
-                className="rounded-2xl bg-[#8c5f46] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+                className="btn-primary px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {loadingSubmit ? "Atribuindo..." : "Atribuir"}
               </button>
@@ -285,8 +297,9 @@ export default function AssignAssetModal({
           setError(null);
           setOpen(true);
         }}
-        className="rounded-xl border border-[#d7d4cd] bg-white px-3 py-2 text-sm font-medium text-[#374151] transition hover:bg-[#f9f5ef]"
+        className="action-button"
       >
+        <AssignIcon />
         Atribuir
       </button>
 

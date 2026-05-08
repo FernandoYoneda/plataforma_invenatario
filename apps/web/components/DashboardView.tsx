@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { getActiveAssignments, getAssets } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import type { Assignment, Asset } from "@/lib/types";
-import AppNavigation from "./AppNavigation";
+import AppShell from "./AppShell";
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -85,132 +85,141 @@ export default function DashboardView() {
     };
   }, [assets, assignments]);
 
+  const cards = [
+    {
+      label: "Total de assets",
+      value: metrics.totalAssets,
+      accent: "rgba(44,100,112,0.16)",
+    },
+    {
+      label: "Assets em estoque",
+      value: metrics.assetsInStock,
+      accent: "rgba(215,121,103,0.16)",
+    },
+    {
+      label: "Assets atribuidos",
+      value: metrics.assetsAssigned,
+      accent: "rgba(23,58,67,0.12)",
+    },
+    {
+      label: "Assets em manutencao",
+      value: metrics.assetsInMaintenance,
+      accent: "rgba(215,121,103,0.12)",
+    },
+    {
+      label: "Assignments ativos",
+      value: metrics.activeAssignments,
+      accent: "rgba(44,100,112,0.1)",
+    },
+  ];
+
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#f4e8dd,transparent_36%),linear-gradient(180deg,#f8f4ee_0%,#efe7dc_100%)] px-4 py-8">
-      <div className="mx-auto max-w-6xl">
-        <header className="mb-8 flex flex-col gap-4 rounded-[28px] border border-black/10 bg-white/90 px-6 py-5 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8c5f46]">
-              Inventario TI
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[#1f2937]">
-              Dashboard
-            </h1>
-            <p className="mt-2 text-sm text-[#6b7280]">
-              Visao geral do inventario e das atribuicoes ativas.
-            </p>
-          </div>
-
-          <AppNavigation current="dashboard" />
-        </header>
-
-        {redirecting ? (
-          <section className="rounded-[28px] border border-black/10 bg-white px-6 py-10 text-sm text-[#6b7280] shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
-            Redirecionando para o login...
-          </section>
-        ) : error ? (
-          <section className="rounded-[28px] border border-rose-200 bg-rose-50 px-6 py-10 text-sm text-rose-700 shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
-            {error}
-          </section>
-        ) : (
-          <>
-            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-              {[
-                { label: "Total de assets", value: metrics.totalAssets },
-                { label: "Assets em estoque", value: metrics.assetsInStock },
-                { label: "Assets atribuidos", value: metrics.assetsAssigned },
-                {
-                  label: "Assets em manutencao",
-                  value: metrics.assetsInMaintenance,
-                },
-                {
-                  label: "Assignments ativos",
-                  value: metrics.activeAssignments,
-                },
-              ].map((card) => (
-                <article
-                  key={card.label}
-                  className="rounded-[28px] border border-black/10 bg-white px-6 py-5 shadow-[0_24px_80px_rgba(15,23,42,0.10)]"
-                >
-                  <div className="text-sm text-[#6b7280]">{card.label}</div>
-                  <div className="mt-3 text-4xl font-semibold tracking-[-0.04em] text-[#1f2937]">
-                    {loading ? "..." : card.value}
-                  </div>
-                </article>
-              ))}
+    <AppShell
+      current="dashboard"
+      title="Dashboard"
+      subtitle="Visao consolidada do inventario, com leitura rapida de ativos, manutencoes e atribuicoes em andamento."
+    >
+          {redirecting ? (
+            <section className="surface-card rounded-[30px] px-6 py-10 text-sm [color:var(--text-secondary)]">
+              Redirecionando para o login...
             </section>
-
-            <section className="mt-8 overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
-              <div className="border-b border-black/10 px-6 py-4">
-                <h2 className="text-lg font-semibold text-[#1f2937]">
-                  Ultimos assignments ativos
-                </h2>
-                <p className="mt-1 text-sm text-[#6b7280]">
-                  Lista simples usando apenas o endpoint atual de assignments ativos.
-                </p>
-              </div>
-
-              {loading ? (
-                <div className="px-6 py-8 text-sm text-[#6b7280]">
-                  Carregando dashboard...
-                </div>
-              ) : assignments.length === 0 ? (
-                <div className="px-6 py-8 text-sm text-[#6b7280]">
-                  Nenhum assignment ativo encontrado.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-[#f9f5ef] text-[#6b7280]">
-                      <tr>
-                        <th className="px-6 py-3 font-medium">Asset</th>
-                        <th className="px-6 py-3 font-medium">Funcionario</th>
-                        <th className="px-6 py-3 font-medium">Atribuido em</th>
-                        <th className="px-6 py-3 font-medium">Observacoes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {assignments.map((assignment) => (
-                        <tr key={assignment.id} className="border-t border-black/5">
-                          <td className="px-6 py-4 text-[#374151]">
-                            <div className="font-medium text-[#111827]">
-                              {assignment.asset?.internalCode ?? assignment.assetId}
-                            </div>
-                            <div className="mt-1 text-xs text-[#6b7280]">
-                              {assignment.asset?.brand ?? "Asset"}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-[#374151]">
-                            <div className="font-medium text-[#111827]">
-                              {assignment.employee?.name ?? assignment.employeeId}
-                            </div>
-                            <div className="mt-1 text-xs text-[#6b7280]">
-                              {assignment.employee?.email ?? "Sem email"}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-[#374151]">
-                            {formatDate(assignment.assignedAt)}
-                          </td>
-                          <td className="px-6 py-4 text-[#374151]">
-                            {assignment.notes ?? "-"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+          ) : error ? (
+            <section className="status-banner-error rounded-[28px] px-6 py-10 text-sm">
+              {error}
             </section>
-
-            {!loading && assets.length === 0 && assignments.length === 0 && (
-              <section className="mt-8 rounded-[28px] border border-black/10 bg-white px-6 py-8 text-sm text-[#6b7280] shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
-                O inventario ainda nao possui assets nem assignments. Cadastre o
-                primeiro asset para iniciar o acompanhamento.
+          ) : (
+            <>
+              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                {cards.map((card) => (
+                  <article
+                    key={card.label}
+                    className="stat-card"
+                  >
+                    <div
+                      className="mb-5 h-2.5 w-16 rounded-full"
+                      style={{ backgroundColor: card.accent }}
+                    />
+                    <div className="text-sm [color:var(--text-secondary)]">
+                      {card.label}
+                    </div>
+                    <div className="mt-3 text-4xl font-semibold tracking-[-0.05em] [color:var(--text-primary)]">
+                      {loading ? "..." : card.value}
+                    </div>
+                  </article>
+                ))}
               </section>
-            )}
-          </>
-        )}
-      </div>
-    </main>
+
+              <section className="overflow-hidden rounded-[30px] border [border-color:var(--border-soft)] bg-[rgba(255,255,255,0.72)] shadow-[0_18px_50px_rgba(23,58,67,0.08)] backdrop-blur">
+                <div className="flex flex-col gap-2 border-b px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold [color:var(--text-primary)]">
+                      Assignments ativos
+                    </h2>
+                    <p className="mt-1 text-sm [color:var(--text-secondary)]">
+                      Ultimos registros disponiveis no endpoint atual.
+                    </p>
+                  </div>
+                  <div className="status-pill">
+                    {loading ? "Carregando..." : `${assignments.length} ativo(s)`}
+                  </div>
+                </div>
+
+                {loading ? (
+                  <div className="px-6 py-8 text-sm [color:var(--text-secondary)]">
+                    Carregando dashboard...
+                  </div>
+                ) : assignments.length === 0 ? (
+                  <div className="px-6 py-8 text-sm [color:var(--text-secondary)]">
+                    Nenhum assignment ativo encontrado.
+                  </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                    <table className="data-table data-table-compact">
+                      <thead>
+                        <tr>
+                          <th>Asset</th>
+                          <th>Funcionario</th>
+                          <th>Atribuido em</th>
+                          <th>Observacoes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {assignments.map((assignment) => (
+                          <tr key={assignment.id}>
+                            <td>
+                              <div className="cell-strong">
+                                {assignment.asset?.internalCode ?? assignment.assetId}
+                              </div>
+                              <div className="mt-1 text-xs [color:var(--text-muted)]">
+                                {assignment.asset?.brand ?? "Asset"}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="cell-strong">
+                                {assignment.employee?.name ?? assignment.employeeId}
+                              </div>
+                              <div className="mt-1 text-xs [color:var(--text-muted)]">
+                                {assignment.employee?.email ?? "Sem email"}
+                              </div>
+                            </td>
+                            <td>{formatDate(assignment.assignedAt)}</td>
+                            <td>{assignment.notes ?? "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+
+              {!loading && assets.length === 0 && assignments.length === 0 && (
+                <section className="surface-card rounded-[28px] px-6 py-8 text-sm [color:var(--text-secondary)]">
+                  O inventario ainda nao possui assets nem assignments. Cadastre o
+                  primeiro asset para iniciar o acompanhamento.
+                </section>
+              )}
+            </>
+          )}
+    </AppShell>
   );
 }

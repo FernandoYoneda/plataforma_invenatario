@@ -11,6 +11,15 @@ function formatDate(value?: string | null) {
   return new Date(value).toLocaleString("pt-BR");
 }
 
+function ReturnIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M9 7H5v4" />
+      <path d="M5 11a7 7 0 1 0 2-4.95L5 7" />
+    </svg>
+  );
+}
+
 export default function ActiveAssignmentsPanel({
   assignments,
   loading,
@@ -48,75 +57,74 @@ export default function ActiveAssignmentsPanel({
   }
 
   return (
-    <section className="mb-8 overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
-      <div className="flex items-center justify-between border-b border-black/10 px-6 py-4">
+    <section className="mb-8 overflow-hidden rounded-[30px] border [border-color:var(--border-soft)] bg-[rgba(255,255,255,0.72)] shadow-[0_18px_50px_rgba(23,58,67,0.08)] backdrop-blur">
+      <div className="flex flex-col gap-3 border-b px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-[#1f2937]">
+          <h2 className="text-lg font-semibold [color:var(--text-primary)]">
             Assignments ativos
           </h2>
-          <p className="mt-1 text-sm text-[#6b7280]">
-            Controle rapido de assets atualmente atribuídos.
+          <p className="mt-1 text-sm [color:var(--text-secondary)]">
+            Controle rapido dos ativos atualmente vinculados a funcionarios.
           </p>
         </div>
-        <div className="text-sm text-[#6b7280]">
+        <div className="status-pill">
           {loading ? "Carregando..." : `${assignments.length} ativo(s)`}
         </div>
       </div>
 
       {error ? (
-        <div className="px-6 py-8 text-sm text-rose-700">{error}</div>
+        <div className="status-banner-error m-6 rounded-[22px] px-4 py-4 text-sm">
+          {error}
+        </div>
       ) : loading ? (
-        <div className="px-6 py-8 text-sm text-[#6b7280]">
+        <div className="px-6 py-8 text-sm [color:var(--text-secondary)]">
           Buscando assignments ativos...
         </div>
       ) : assignments.length === 0 ? (
-        <div className="px-6 py-8 text-sm text-[#6b7280]">
+        <div className="px-6 py-8 text-sm [color:var(--text-secondary)]">
           Nenhum assignment ativo no momento.
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-[#f9f5ef] text-[#6b7280]">
+          <table className="data-table data-table-compact">
+            <thead>
               <tr>
-                <th className="px-6 py-3 font-medium">Asset</th>
-                <th className="px-6 py-3 font-medium">Funcionario</th>
-                <th className="px-6 py-3 font-medium">Atribuido em</th>
-                <th className="px-6 py-3 font-medium">Observacoes</th>
-                <th className="px-6 py-3 text-right font-medium">Acao</th>
+                <th>Asset</th>
+                <th>Funcionario</th>
+                <th>Atribuido em</th>
+                <th>Observacoes</th>
+                <th className="text-right">Acao</th>
               </tr>
             </thead>
             <tbody>
               {assignments.map((assignment) => (
-                <tr key={assignment.id} className="border-t border-black/5">
-                  <td className="px-6 py-4 text-[#374151]">
-                    <div className="font-medium text-[#111827]">
+                <tr key={assignment.id}>
+                  <td>
+                    <div className="cell-strong">
                       {assignment.asset?.internalCode ?? assignment.assetId}
                     </div>
-                    <div className="mt-1 text-xs text-[#6b7280]">
+                    <div className="mt-1 text-xs [color:var(--text-muted)]">
                       {assignment.asset?.brand ?? "Asset"}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-[#374151]">
-                    <div className="font-medium text-[#111827]">
+                  <td>
+                    <div className="cell-strong">
                       {assignment.employee?.name ?? assignment.employeeId}
                     </div>
-                    <div className="mt-1 text-xs text-[#6b7280]">
+                    <div className="mt-1 text-xs [color:var(--text-muted)]">
                       {assignment.employee?.email ?? "Sem email"}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-[#374151]">
-                    {formatDate(assignment.assignedAt)}
-                  </td>
-                  <td className="px-6 py-4 text-[#374151]">
-                    {assignment.notes ?? "-"}
-                  </td>
-                  <td className="px-6 py-4 text-right">
+                  <td>{formatDate(assignment.assignedAt)}</td>
+                  <td>{assignment.notes ?? "-"}</td>
+                  <td className="text-right">
                     <button
                       type="button"
                       onClick={() => handleReturn(assignment.id)}
                       disabled={returningId === assignment.id}
-                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+                      className="action-button border-rose-200 bg-rose-50/90 text-rose-700 hover:bg-rose-100 disabled:opacity-60"
                     >
+                      <ReturnIcon />
                       {returningId === assignment.id ? "Devolvendo..." : "Devolver"}
                     </button>
                   </td>

@@ -7,7 +7,7 @@ import { getActiveAssignments, getAssets } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import type { Asset, Assignment } from "@/lib/types";
 import ActiveAssignmentsPanel from "./ActiveAssignmentsPanel";
-import AppNavigation from "./AppNavigation";
+import AppShell from "./AppShell";
 import AssignAssetModal from "./AssignAssetModal";
 import AssetHistoryModal from "./AssetHistoryModal";
 import NewAssetModal from "./NewAssetModal";
@@ -91,7 +91,6 @@ export default function AssetsList() {
         err instanceof Error ? err.message : "Nao foi possivel carregar os ativos.";
 
       handleAuthError(err);
-
       setError(message);
     } finally {
       setLoading(false);
@@ -134,140 +133,116 @@ export default function AssetsList() {
   }, [router]);
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#f4e8dd,transparent_36%),linear-gradient(180deg,#f8f4ee_0%,#efe7dc_100%)] px-4 py-8">
-      <div className="mx-auto max-w-6xl">
-        <header className="mb-8 flex flex-col gap-4 rounded-[28px] border border-black/10 bg-white/90 px-6 py-5 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8c5f46]">
-              Inventario TI
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[#1f2937]">
-              Assets
-            </h1>
-            <p className="mt-2 text-sm text-[#6b7280]">
-              Listagem simples consumindo o endpoint GET /assets.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <NewAssetModal
-              onCreated={(asset) => {
-                setAssets((current) => [asset, ...current]);
-                setError(null);
-              }}
-            />
-            <AppNavigation current="assets" />
-          </div>
-        </header>
-
-        <ActiveAssignmentsPanel
-          assignments={activeAssignments}
-          loading={loadingAssignments}
-          error={assignmentsError}
-          onReturned={(assignmentId) => {
-            setActiveAssignments((current) =>
-              current.filter((item) => item.id !== assignmentId),
-            );
-            setHistoryRefreshKey((current) => current + 1);
+    <AppShell
+      current="assets"
+      title="Assets"
+      subtitle="Consulta principal de ativos, com criacao, atribuicoes e historico disponiveis na mesma tela."
+      actions={
+        <NewAssetModal
+          onCreated={(asset) => {
+            setAssets((current) => [asset, ...current]);
+            setError(null);
           }}
         />
+      }
+    >
+          <ActiveAssignmentsPanel
+            assignments={activeAssignments}
+            loading={loadingAssignments}
+            error={assignmentsError}
+            onReturned={(assignmentId) => {
+              setActiveAssignments((current) =>
+                current.filter((item) => item.id !== assignmentId),
+              );
+              setHistoryRefreshKey((current) => current + 1);
+            }}
+          />
 
-        <section className="overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
-          <div className="flex items-center justify-between border-b border-black/10 px-6 py-4">
-            <div className="text-sm text-[#6b7280]">
-              {redirecting
-                ? "Redirecionando..."
-                : loading
-                  ? "Carregando..."
-                  : `${assets.length} asset(s)`}
+          <section className="overflow-hidden rounded-[30px] border [border-color:var(--border-soft)] bg-[rgba(255,255,255,0.72)] shadow-[0_18px_50px_rgba(23,58,67,0.08)] backdrop-blur">
+            <div className="flex flex-col gap-3 border-b px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-center sm:justify-between">
+              <div className="status-pill">
+                {redirecting
+                  ? "Redirecionando..."
+                  : loading
+                    ? "Carregando..."
+                    : `${assets.length} asset(s)`}
+              </div>
+              <Link
+                href="/login"
+                className="text-sm font-medium [color:var(--brand-teal-700)] underline-offset-4 hover:underline"
+              >
+                Ir para login
+              </Link>
             </div>
-            <Link
-              href="/login"
-              className="text-sm font-medium text-[#8c5f46] underline-offset-4 hover:underline"
-            >
-              Ir para login
-            </Link>
-          </div>
 
-          {redirecting ? (
-            <div className="px-6 py-10 text-sm text-[#6b7280]">
-              Redirecionando para o login...
-            </div>
-          ) : error ? (
-            <div className="px-6 py-10 text-sm text-[#b42318]">{error}</div>
-          ) : loading ? (
-            <div className="px-6 py-10 text-sm text-[#6b7280]">
-              Buscando assets...
-            </div>
-          ) : assets.length === 0 ? (
-            <div className="px-6 py-10 text-sm text-[#6b7280]">
-              Nenhum asset encontrado.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-[#f9f5ef] text-[#6b7280]">
-                  <tr>
-                    <th className="px-6 py-3 font-medium">Codigo</th>
-                    <th className="px-6 py-3 font-medium">Tipo</th>
-                    <th className="px-6 py-3 font-medium">Marca</th>
-                    <th className="px-6 py-3 font-medium">Modelo</th>
-                    <th className="px-6 py-3 font-medium">Serial</th>
-                    <th className="px-6 py-3 font-medium">Status</th>
-                    <th className="px-6 py-3 text-right font-medium">Valor</th>
-                    <th className="px-6 py-3 text-right font-medium">Acoes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assets.map((asset) => (
-                    <tr key={asset.id} className="border-t border-black/5">
-                      <td className="px-6 py-4 font-medium text-[#111827]">
-                        {asset.internalCode}
-                      </td>
-                      <td className="px-6 py-4 text-[#374151]">
-                        {labelType(asset.type)}
-                      </td>
-                      <td className="px-6 py-4 text-[#374151]">{asset.brand}</td>
-                      <td className="px-6 py-4 text-[#374151]">
-                        {asset.model ?? "-"}
-                      </td>
-                      <td className="px-6 py-4 text-[#374151]">
-                        {asset.serialNumber ?? "-"}
-                      </td>
-                      <td className="px-6 py-4 text-[#374151]">
-                        {labelStatus(asset.status)}
-                      </td>
-                      <td className="px-6 py-4 text-right text-[#374151]">
-                        {moneyBRL(asset.valueCents)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex justify-end gap-2">
-                          <AssignAssetModal
-                            asset={asset}
-                            onAssigned={(assignment) => {
-                              setActiveAssignments((current) => [
-                                assignment,
-                                ...current.filter(
-                                  (item) => item.assetId !== assignment.assetId,
-                                ),
-                              ]);
-                              setHistoryRefreshKey((current) => current + 1);
-                            }}
-                          />
-                          <AssetHistoryModal
-                            asset={asset}
-                            refreshKey={historyRefreshKey}
-                          />
-                        </div>
-                      </td>
+            {redirecting ? (
+              <div className="px-6 py-10 text-sm [color:var(--text-secondary)]">
+                Redirecionando para o login...
+              </div>
+            ) : error ? (
+              <div className="status-banner-error m-6 rounded-[22px] px-4 py-4 text-sm">
+                {error}
+              </div>
+            ) : loading ? (
+              <div className="px-6 py-10 text-sm [color:var(--text-secondary)]">
+                Buscando assets...
+              </div>
+            ) : assets.length === 0 ? (
+              <div className="px-6 py-10 text-sm [color:var(--text-secondary)]">
+                Nenhum asset encontrado.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="data-table data-table-compact">
+                  <thead>
+                    <tr>
+                      <th>Codigo</th>
+                      <th>Tipo</th>
+                      <th>Marca</th>
+                      <th>Modelo</th>
+                      <th>Serial</th>
+                      <th>Status</th>
+                      <th className="text-right">Valor</th>
+                      <th className="text-right">Acoes</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      </div>
-    </main>
+                  </thead>
+                  <tbody>
+                    {assets.map((asset) => (
+                      <tr key={asset.id}>
+                        <td className="cell-strong">{asset.internalCode}</td>
+                        <td>{labelType(asset.type)}</td>
+                        <td>{asset.brand}</td>
+                        <td>{asset.model ?? "-"}</td>
+                        <td>{asset.serialNumber ?? "-"}</td>
+                        <td>{labelStatus(asset.status)}</td>
+                        <td className="text-right">{moneyBRL(asset.valueCents)}</td>
+                        <td>
+                          <div className="flex justify-end gap-2">
+                            <AssignAssetModal
+                              asset={asset}
+                              onAssigned={(assignment) => {
+                                setActiveAssignments((current) => [
+                                  assignment,
+                                  ...current.filter(
+                                    (item) => item.assetId !== assignment.assetId,
+                                  ),
+                                ]);
+                                setHistoryRefreshKey((current) => current + 1);
+                              }}
+                            />
+                            <AssetHistoryModal
+                              asset={asset}
+                              refreshKey={historyRefreshKey}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+    </AppShell>
   );
 }

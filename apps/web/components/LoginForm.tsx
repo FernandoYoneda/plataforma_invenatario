@@ -44,23 +44,21 @@ export default function LoginForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="w-full max-w-md rounded-[28px] border border-black/10 bg-white p-8 shadow-[0_24px_80px_rgba(15,23,42,0.10)]"
+      className="glass-panel w-full max-w-md rounded-[32px] p-8"
     >
       <div className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8c5f46]">
-          Inventario TI
-        </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-[#1f2937]">
+        <p className="eyebrow">Inventario TI</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.03em] [color:var(--text-primary)]">
           Entrar
         </h1>
-        <p className="mt-2 text-sm text-[#6b7280]">
+        <p className="mt-2 text-sm [color:var(--text-secondary)]">
           Use suas credenciais para acessar os ativos.
         </p>
       </div>
 
       <div className="space-y-4">
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium text-[#374151]">
+          <span className="mb-1.5 block text-sm font-medium [color:var(--text-primary)]">
             Email
           </span>
           <input
@@ -68,20 +66,20 @@ export default function LoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="voce@empresa.com"
-            className="w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-sm text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+            className="brand-input text-sm"
           />
         </label>
 
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium text-[#374151]">
+          <span className="mb-1.5 block text-sm font-medium [color:var(--text-primary)]">
             Senha
           </span>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            className="w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-sm text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+            placeholder="********"
+            className="brand-input text-sm"
           />
         </label>
       </div>
@@ -89,7 +87,7 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="mt-6 w-full rounded-2xl bg-[#8c5f46] px-4 py-3 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+        className="btn-primary mt-6 w-full px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
       >
         {loading ? "Entrando..." : "Entrar"}
       </button>

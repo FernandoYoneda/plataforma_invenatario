@@ -1,20 +1,53 @@
+import BrandLogo from "@/components/BrandLogo";
 import LoginForm from "@/components/LoginForm";
 
 export default function LoginPage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#f4e8dd,transparent_36%),linear-gradient(180deg,#f8f4ee_0%,#efe7dc_100%)] px-4 py-8">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-        <section className="rounded-[36px] border border-black/10 bg-[#1f2937] px-8 py-10 text-white shadow-[0_30px_100px_rgba(15,23,42,0.22)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d6b79d]">
-            Casabella
-          </p>
-          <h2 className="mt-4 max-w-xl text-4xl font-semibold tracking-[-0.04em]">
-            Controle seus ativos de TI em um fluxo simples.
-          </h2>
-          <p className="mt-4 max-w-lg text-sm leading-6 text-white/72">
-            Esta tela autentica no endpoint POST /auth/login, armazena o token
-            no navegador e libera a consulta da listagem em GET /assets.
-          </p>
+    <main className="page-shell">
+      <div className="page-width grid min-h-[calc(100vh-4rem)] gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
+        <section className="overflow-hidden rounded-[38px] border [border-color:rgba(247,243,237,0.12)] bg-[linear-gradient(160deg,rgba(23,58,67,0.98)_0%,rgba(31,75,85,0.96)_62%,rgba(215,121,103,0.84)_150%)] px-7 py-9 text-white shadow-[0_34px_100px_rgba(23,58,67,0.26)] sm:px-10 sm:py-12">
+          <div className="login-hero-brand">
+            <BrandLogo
+              variant="horizontal"
+              tone="dark"
+              className="login-hero-logo"
+              imageClassName="login-hero-logo-image object-contain"
+              priority
+            />
+          </div>
+
+          <div className="mt-8 max-w-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#f5cdc4]">
+              Plataforma interna
+            </p>
+            <h2 className="mt-5 text-4xl font-semibold tracking-[-0.05em] text-white lg:text-[3.35rem]">
+              Controle o ciclo de vida dos ativos com uma interface mais clara.
+            </h2>
+            <p className="mt-5 max-w-lg text-sm leading-7 text-white/78">
+              Login, dashboard, inventario, atribuicoes e funcionarios em um
+              fluxo unico, com identidade visual alinhada a Casabella.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-4 sm:grid-cols-3">
+            {[
+              { label: "Inventario", value: "Assets e status" },
+              { label: "Atribuicoes", value: "Controle ativo" },
+              { label: "Equipe", value: "Funcionarios" },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-[24px] border border-white/12 bg-white/8 px-5 py-4 backdrop-blur"
+              >
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#f5cdc4]">
+                  {item.label}
+                </div>
+                <div className="mt-2 text-sm font-medium text-white/88">
+                  {item.value}
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
 
         <div className="flex items-center justify-center">
