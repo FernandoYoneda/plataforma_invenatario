@@ -24,3 +24,13 @@ export type Asset = {
   registeredAt: string;
   notes?: string | null;
 };
+
+export type CreateAssetInput = {
+  type: AssetType;
+  brand: string;
+  model?: string | null;
+  serialNumber?: string | null;
+  valueCents?: number | null;
+  status?: AssetStatus;
+  notes?: string | null;
+};

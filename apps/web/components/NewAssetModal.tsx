@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import type { AssetStatus, AssetType } from "@/lib/types";
+import { createAsset } from "@/lib/api";
+import { getAuthToken } from "@/lib/auth";
+import type { Asset, AssetStatus, AssetType } from "@/lib/types";
 
 const TYPES: { value: AssetType; label: string }[] = [
   { value: "DESKTOP", label: "Computador (Desktop)" },
@@ -17,15 +19,17 @@ const TYPES: { value: AssetType; label: string }[] = [
 const STATUS: { value: AssetStatus; label: string }[] = [
   { value: "EM_USO", label: "Em uso" },
   { value: "ESTOQUE", label: "Estoque" },
-  { value: "MANUTENCAO", label: "Manutenção" },
+  { value: "MANUTENCAO", label: "Manutencao" },
   { value: "BAIXADO", label: "Baixado" },
 ];
 
 function parseBRLToCents(input: string): number | null {
   const s = input.trim();
   if (!s) return null;
+
   const normalized = s.replace(/\./g, "").replace(",", ".");
   const value = Number(normalized);
+
   if (!Number.isFinite(value) || value < 0) return null;
   return Math.round(value * 100);
 }
@@ -33,13 +37,10 @@ function parseBRLToCents(input: string): number | null {
 export default function NewAssetModal({
   onCreated,
 }: {
-  onCreated: () => void;
+  onCreated: (asset: Asset) => void;
 }) {
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002";
-
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,36 +54,37 @@ export default function NewAssetModal({
 
   const brandInputRef = useRef<HTMLInputElement | null>(null);
 
-  // portal só no client
   useEffect(() => setMounted(true), []);
 
-  // trava scroll quando abrir
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
+
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
-      document.body.style.overflow = prev || "";
+      document.body.style.overflow = previousOverflow || "";
     };
   }, [open]);
 
-  // ESC fecha
   useEffect(() => {
     if (!open) return;
 
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !loading) setOpen(false);
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !loading) {
+        setOpen(false);
+      }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, loading]);
 
-  // foco automático no campo Marca
   useEffect(() => {
     if (!open) return;
-    const id = setTimeout(() => brandInputRef.current?.focus(), 0);
-    return () => clearTimeout(id);
+
+    const id = window.setTimeout(() => brandInputRef.current?.focus(), 0);
+    return () => window.clearTimeout(id);
   }, [open]);
 
   const valueCents = useMemo(() => parseBRLToCents(valueBRL), [valueBRL]);
@@ -90,7 +92,9 @@ export default function NewAssetModal({
     type === "DESKTOP" || type === "NOTEBOOK" || type === "MONITOR";
 
   function close() {
-    if (!loading) setOpen(false);
+    if (!loading) {
+      setOpen(false);
+    }
   }
 
   function resetForm() {
@@ -104,29 +108,35 @@ export default function NewAssetModal({
     setError(null);
   }
 
-  async function submit() {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setError(null);
 
     if (!brand.trim()) {
-      const message = "Marca é obrigatória.";
+      const message = "Marca e obrigatoria.";
       setError(message);
       toast.error(message);
       return;
     }
 
     if (needsValue && valueCents == null) {
-      const message = "Valor é obrigatório para Desktop/Notebook/Monitor.";
+      const message = "Valor e obrigatorio para Desktop, Notebook e Monitor.";
       setError(message);
       toast.error(message);
       return;
     }
 
     setLoading(true);
+
     try {
-      const res = await fetch(`${apiBase}/assets`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const token = getAuthToken();
+
+      if (!token) {
+        throw new Error("Sessao expirada. Faca login novamente.");
+      }
+
+      const asset = await createAsset(
+        {
           type,
           brand: brand.trim(),
           model: model.trim() || null,
@@ -136,20 +146,16 @@ export default function NewAssetModal({
             ? (valueCents as number)
             : (valueCents ?? null),
           notes: notes.trim() || null,
-        }),
-      });
+        },
+        token,
+      );
 
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "Falha ao criar ativo.");
-      }
-
-      toast.success("Ativo cadastrado com sucesso");
+      toast.success("Asset criado com sucesso.");
       resetForm();
       setOpen(false);
-      onCreated();
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Erro ao criar ativo.";
+      onCreated(asset);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro ao criar asset.";
       setError(message);
       toast.error(message);
     } finally {
@@ -159,137 +165,155 @@ export default function NewAssetModal({
 
   const modal = (
     <div className="fixed inset-0 z-[99999]" onClick={close}>
-      <div className="absolute inset-0 bg-black/70" />
+      <div className="absolute inset-0 bg-[#1f2937]/65 backdrop-blur-[2px]" />
 
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
-          className="w-full max-w-xl overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.22)]"
+          onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
-            <h2 className="text-base font-semibold">Cadastrar novo ativo</h2>
+          <div className="flex items-center justify-between border-b border-black/10 px-6 py-5">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8c5f46]">
+                Cadastro
+              </p>
+              <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[#1f2937]">
+                Novo Asset
+              </h2>
+            </div>
 
             <button
               type="button"
               onClick={close}
-              className="rounded-lg border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:bg-white/5"
+              disabled={loading}
+              className="rounded-2xl border border-[#d7d4cd] px-3 py-2 text-sm text-[#6b7280] transition hover:bg-[#f9f5ef] disabled:opacity-50"
             >
               Fechar
             </button>
           </div>
 
-          <div className="max-h-[75vh] overflow-auto p-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">Tipo</span>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value as AssetType)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                >
-                  {TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+          <form onSubmit={submit}>
+            <div className="max-h-[75vh] overflow-auto px-6 py-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="text-sm">
+                  <span className="font-medium text-[#374151]">Tipo</span>
+                  <select
+                    value={type}
+                    onChange={(event) => setType(event.target.value as AssetType)}
+                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                  >
+                    {TYPES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">Status</span>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as AssetStatus)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                >
-                  {STATUS.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <label className="text-sm">
+                  <span className="font-medium text-[#374151]">Status</span>
+                  <select
+                    value={status}
+                    onChange={(event) =>
+                      setStatus(event.target.value as AssetStatus)
+                    }
+                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                  >
+                    {STATUS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">Marca *</span>
-                <input
-                  ref={brandInputRef}
-                  value={brand}
-                  onChange={(e) => setBrand(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  placeholder="Ex.: Dell, LG, Logitech..."
-                />
-              </label>
+                <label className="text-sm">
+                  <span className="font-medium text-[#374151]">Marca *</span>
+                  <input
+                    ref={brandInputRef}
+                    value={brand}
+                    onChange={(event) => setBrand(event.target.value)}
+                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    placeholder="Dell, LG, Logitech..."
+                  />
+                </label>
 
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">Modelo</span>
-                <input
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  placeholder="Ex.: Latitude 5420..."
-                />
-              </label>
+                <label className="text-sm">
+                  <span className="font-medium text-[#374151]">Modelo</span>
+                  <input
+                    value={model}
+                    onChange={(event) => setModel(event.target.value)}
+                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    placeholder="Latitude 5420, UltraSharp..."
+                  />
+                </label>
 
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">Serial</span>
-                <input
-                  value={serialNumber}
-                  onChange={(e) => setSerialNumber(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  placeholder="Ex.: ABC123..."
-                />
-              </label>
+                <label className="text-sm">
+                  <span className="font-medium text-[#374151]">Serial</span>
+                  <input
+                    value={serialNumber}
+                    onChange={(event) => setSerialNumber(event.target.value)}
+                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    placeholder="ABC123456"
+                  />
+                </label>
 
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">
-                  Valor {needsValue ? "*" : "(opcional)"} (R$)
-                </span>
-                <input
-                  value={valueBRL}
-                  onChange={(e) => setValueBRL(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  placeholder="Ex.: 3500,00"
-                />
-              </label>
+                <label className="text-sm">
+                  <span className="font-medium text-[#374151]">
+                    Valor {needsValue ? "*" : "(opcional)"} (R$)
+                  </span>
+                  <input
+                    value={valueBRL}
+                    onChange={(event) => setValueBRL(event.target.value)}
+                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    placeholder="3500,00"
+                  />
+                </label>
 
-              <label className="text-sm sm:col-span-2">
-                <span className="text-[var(--muted)]">Observações</span>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  rows={3}
-                />
-              </label>
+                <label className="text-sm sm:col-span-2">
+                  <span className="font-medium text-[#374151]">Observacoes</span>
+                  <textarea
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white"
+                    rows={4}
+                    placeholder="Observacoes opcionais sobre o asset."
+                  />
+                </label>
+              </div>
+
+              {error && (
+                <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {error}
+                </div>
+              )}
+
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {needsValue
+                  ? "Para Desktop, Notebook e Monitor, o valor e obrigatorio."
+                  : "Para este tipo, o valor pode ficar vazio."}
+              </div>
             </div>
 
-            {error && (
-              <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-                {error}
-              </div>
-            )}
-          </div>
+            <div className="flex justify-end gap-3 border-t border-black/10 px-6 py-5">
+              <button
+                type="button"
+                onClick={close}
+                disabled={loading}
+                className="rounded-2xl border border-[#d7d4cd] bg-white px-4 py-3 text-sm font-medium text-[#374151] transition hover:bg-[#f9f5ef] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
 
-          <div className="flex justify-end gap-2 border-t border-[var(--border)] px-4 py-3">
-            <button
-              type="button"
-              onClick={close}
-              disabled={loading}
-              className="rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm hover:brightness-110 disabled:opacity-50"
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="button"
-              onClick={submit}
-              disabled={loading}
-              className="rounded-xl border border-[var(--border)] bg-white/15 px-3 py-2 text-sm hover:bg-white/20 disabled:opacity-50"
-            >
-              {loading ? "Salvando..." : "Salvar"}
-            </button>
-          </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-2xl bg-[#8c5f46] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {loading ? "Criando..." : "Criar asset"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -299,10 +323,13 @@ export default function NewAssetModal({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-xl border border-[var(--border)] bg-white/10 px-3 py-2 text-sm hover:bg-white/15"
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
+        className="rounded-2xl bg-[#8c5f46] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105"
       >
-        + Novo ativo
+        Novo Asset
       </button>
 
       {open && mounted ? createPortal(modal, document.body) : null}
