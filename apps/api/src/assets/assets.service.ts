@@ -1,12 +1,45 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AssetType } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
+import { FindAssetsQueryDto } from './dto/find-assets-query.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
 
 @Injectable()
 export class AssetsService {
   constructor(private prisma: PrismaService) {}
+
+  private readonly typedAssets = new Set<AssetType>([
+    AssetType.DESKTOP,
+    AssetType.NOTEBOOK,
+    AssetType.MONITOR,
+  ]);
+
+  private trimToNull(value?: string | null) {
+    if (typeof value !== 'string') return null;
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private trimToUndefined(value?: string | null) {
+    if (typeof value !== 'string') return undefined;
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private ensureValueForTypedAsset(type: AssetType, valueCents?: number | null) {
+    if (this.typedAssets.has(type) && valueCents == null) {
+      throw new BadRequestException(
+        'valueCents e obrigatorio para DESKTOP, NOTEBOOK e MONITOR',
+      );
+    }
+  }
 
   private async generateInternalCode(): Promise<string> {
     return this.prisma.$transaction(async (tx) => {
@@ -20,60 +53,8 @@ export class AssetsService {
     });
   }
 
-  async update(id: string, dto: UpdateAssetDto) {
-    const exists = await this.prisma.asset.findUnique({ where: { id } });
-    if (!exists) throw new NotFoundException('Ativo não encontrado');
-
-    return this.prisma.asset.update({
-      where: { id },
-      data: {
-        ...(dto.type !== undefined && { type: dto.type }),
-        ...(dto.status !== undefined && { status: dto.status }),
-        ...(dto.valueCents !== undefined && { valueCents: dto.valueCents }),
-
-        ...(dto.brand !== undefined && {
-          brand: typeof dto.brand === 'string' ? dto.brand.trim() : '',
-        }),
-
-        ...(dto.model !== undefined && {
-          model:
-            typeof dto.model === 'string' ? dto.model.trim() || null : null,
-        }),
-
-        ...(dto.serialNumber !== undefined && {
-          serialNumber:
-            typeof dto.serialNumber === 'string'
-              ? dto.serialNumber.trim() || null
-              : null,
-        }),
-
-        ...(dto.notes !== undefined && {
-          notes:
-            typeof dto.notes === 'string' ? dto.notes.trim() || null : null,
-        }),
-      },
-    });
-  }
-
-  async remove(id: string) {
-    return this.prisma.asset.delete({
-      where: { id },
-    });
-  }
-
   async create(dto: CreateAssetDto) {
-    const needsValue = new Set<AssetType>([
-      AssetType.DESKTOP,
-      AssetType.NOTEBOOK,
-      AssetType.MONITOR,
-    ]).has(dto.type);
-
-    if (
-      needsValue &&
-      (dto.valueCents === undefined || dto.valueCents === null)
-    ) {
-      throw new Error('valueCents é obrigatório para DESKTOP/NOTEBOOK/MONITOR');
-    }
+    this.ensureValueForTypedAsset(dto.type, dto.valueCents);
 
     const internalCode = await this.generateInternalCode();
 
@@ -81,35 +62,55 @@ export class AssetsService {
       data: {
         internalCode,
         type: dto.type,
-        brand: dto.brand,
-        model: dto.model,
-        serialNumber: dto.serialNumber,
+        brand: dto.brand.trim(),
+        model: this.trimToNull(dto.model),
+        serialNumber: this.trimToNull(dto.serialNumber),
         valueCents: dto.valueCents,
         status: dto.status,
-        notes: dto.notes,
+        notes: this.trimToNull(dto.notes),
       },
     });
   }
 
-  async findAll(filters: {
-    type?: string;
-    status?: string;
-    brand?: string;
-    q?: string;
-  }) {
+  async findAll(filters: FindAssetsQueryDto) {
     const { type, status, brand, q } = filters;
+    const normalizedBrand = this.trimToUndefined(brand);
+    const normalizedQuery = this.trimToUndefined(q);
 
     return this.prisma.asset.findMany({
       where: {
-        ...(type ? { type: type as any } : {}),
-        ...(status ? { status: status as any } : {}),
-        ...(brand ? { brand: { contains: brand, mode: 'insensitive' } } : {}),
-        ...(q
+        ...(type ? { type } : {}),
+        ...(status ? { status } : {}),
+        ...(normalizedBrand
+          ? { brand: { contains: normalizedBrand, mode: 'insensitive' } }
+          : {}),
+        ...(normalizedQuery
           ? {
               OR: [
-                { internalCode: { contains: q, mode: 'insensitive' } },
-                { model: { contains: q, mode: 'insensitive' } },
-                { serialNumber: { contains: q, mode: 'insensitive' } },
+                {
+                  internalCode: {
+                    contains: normalizedQuery,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  brand: {
+                    contains: normalizedQuery,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  model: {
+                    contains: normalizedQuery,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  serialNumber: {
+                    contains: normalizedQuery,
+                    mode: 'insensitive',
+                  },
+                },
               ],
             }
           : {}),
@@ -119,6 +120,50 @@ export class AssetsService {
   }
 
   async findOne(id: string) {
-    return this.prisma.asset.findUnique({ where: { id } });
+    const asset = await this.prisma.asset.findUnique({ where: { id } });
+    if (!asset) throw new NotFoundException('Ativo nao encontrado');
+
+    return asset;
+  }
+
+  async update(id: string, dto: UpdateAssetDto) {
+    const exists = await this.prisma.asset.findUnique({ where: { id } });
+    if (!exists) throw new NotFoundException('Ativo nao encontrado');
+
+    const nextType = dto.type ?? exists.type;
+    const nextValueCents =
+      dto.valueCents !== undefined ? dto.valueCents : exists.valueCents;
+
+    this.ensureValueForTypedAsset(nextType, nextValueCents);
+
+    return this.prisma.asset.update({
+      where: { id },
+      data: {
+        ...(dto.type !== undefined && { type: dto.type }),
+        ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.valueCents !== undefined && { valueCents: dto.valueCents }),
+        ...(dto.brand !== undefined && {
+          brand: this.trimToUndefined(dto.brand) ?? exists.brand,
+        }),
+        ...(dto.model !== undefined && {
+          model: this.trimToNull(dto.model),
+        }),
+        ...(dto.serialNumber !== undefined && {
+          serialNumber: this.trimToNull(dto.serialNumber),
+        }),
+        ...(dto.notes !== undefined && {
+          notes: this.trimToNull(dto.notes),
+        }),
+      },
+    });
+  }
+
+  async remove(id: string) {
+    const exists = await this.prisma.asset.findUnique({ where: { id } });
+    if (!exists) throw new NotFoundException('Ativo nao encontrado');
+
+    return this.prisma.asset.delete({
+      where: { id },
+    });
   }
 }

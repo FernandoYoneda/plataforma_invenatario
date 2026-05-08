@@ -1,19 +1,9 @@
-import { IsEnum, IsInt, IsOptional, IsString, Min } from "class-validator";
+import { Transform, Type } from 'class-transformer';
+import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { AssetStatus, AssetType } from '@prisma/client';
 
-enum AssetStatus {
-  EM_USO = "EM_USO",
-  ESTOQUE = "ESTOQUE",
-  MANUTENCAO = "MANUTENCAO",
-  BAIXADO = "BAIXADO",
-}
-
-enum AssetType {
-  DESKTOP = "DESKTOP",
-  NOTEBOOK = "NOTEBOOK",
-  MONITOR = "MONITOR",
-  MOUSE = "MOUSE",
-  TECLADO = "TECLADO",
-  OUTRO = "OUTRO",
+function trimString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : value;
 }
 
 export class UpdateAssetDto {
@@ -22,14 +12,17 @@ export class UpdateAssetDto {
   type?: AssetType;
 
   @IsOptional()
+  @Transform(({ value }) => trimString(value))
   @IsString()
   brand?: string;
 
   @IsOptional()
+  @Transform(({ value }) => trimString(value))
   @IsString()
   model?: string;
 
   @IsOptional()
+  @Transform(({ value }) => trimString(value))
   @IsString()
   serialNumber?: string;
 
@@ -38,11 +31,13 @@ export class UpdateAssetDto {
   status?: AssetStatus;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(0)
   valueCents?: number;
 
   @IsOptional()
+  @Transform(({ value }) => trimString(value))
   @IsString()
   notes?: string;
 }

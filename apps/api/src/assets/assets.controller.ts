@@ -8,9 +8,9 @@ import {
   Patch,
   Delete,
 } from '@nestjs/common';
-
 import { AssetsService } from './assets.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
+import { FindAssetsQueryDto } from './dto/find-assets-query.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
 
 @Controller('assets')
@@ -23,13 +23,8 @@ export class AssetsController {
   }
 
   @Get()
-  findAll(
-    @Query('type') type?: string,
-    @Query('status') status?: string,
-    @Query('brand') brand?: string,
-    @Query('q') q?: string,
-  ) {
-    return this.assetsService.findAll({ type, status, brand, q });
+  findAll(@Query() query: FindAssetsQueryDto) {
+    return this.assetsService.findAll(query);
   }
 
   @Get(':id')
