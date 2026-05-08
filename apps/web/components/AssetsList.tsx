@@ -7,10 +7,10 @@ import { getActiveAssignments, getAssets } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import type { Asset, Assignment } from "@/lib/types";
 import ActiveAssignmentsPanel from "./ActiveAssignmentsPanel";
+import AppNavigation from "./AppNavigation";
 import AssignAssetModal from "./AssignAssetModal";
 import AssetHistoryModal from "./AssetHistoryModal";
 import NewAssetModal from "./NewAssetModal";
-import LogoutButton from "./LogoutButton";
 
 function moneyBRL(valueCents?: number | null) {
   if (valueCents == null) return "-";
@@ -149,14 +149,14 @@ export default function AssetsList() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <NewAssetModal
               onCreated={(asset) => {
                 setAssets((current) => [asset, ...current]);
                 setError(null);
               }}
             />
-            <LogoutButton />
+            <AppNavigation current="assets" />
           </div>
         </header>
 

@@ -30,7 +30,7 @@ export default function LoginForm() {
 
       setAuthToken(response.accessToken);
       toast.success("Login realizado com sucesso.");
-      router.replace("/assets");
+      router.replace("/dashboard");
       router.refresh();
     } catch (error: unknown) {
       const message =
