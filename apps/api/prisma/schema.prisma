@@ -40,6 +40,26 @@ model User {
   assetsCreated Asset[] @relation("AssetsCreatedBy")
 }
 
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assets Asset[]
+}
+
+model Location {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  assets Asset[]
+}
+
 model Counter {
   key        String   @id
   nextNumber Int
@@ -57,9 +77,13 @@ model Asset {
   status       AssetStatus @default(ESTOQUE)
   registeredAt DateTime    @default(now())
   notes        String?
+  categoryId   String?
+  locationId   String?
 
   createdById String?
   createdBy   User?   @relation("AssetsCreatedBy", fields: [createdById], references: [id])
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  location    Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
