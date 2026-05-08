@@ -12,6 +12,22 @@ export type AssetStatus =
   | "MANUTENCAO"
   | "BAIXADO";
 
+export type Category = {
+  id: string;
+  name: string;
+  description?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Location = {
+  id: string;
+  name: string;
+  description?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Asset = {
   id: string;
   internalCode: string;
@@ -33,4 +49,6 @@ export type CreateAssetInput = {
   valueCents?: number | null;
   status?: AssetStatus;
   notes?: string | null;
+  categoryId?: string;
+  locationId?: string;
 };

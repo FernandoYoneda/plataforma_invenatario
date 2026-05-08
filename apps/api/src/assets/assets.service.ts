@@ -55,6 +55,11 @@ export class AssetsService {
 
   async create(dto: CreateAssetDto) {
     this.ensureValueForTypedAsset(dto.type, dto.valueCents);
+    const normalizedBrand = this.trimToUndefined(dto.brand);
+
+    if (!normalizedBrand) {
+      throw new BadRequestException('brand e obrigatorio');
+    }
 
     const internalCode = await this.generateInternalCode();
 
@@ -62,7 +67,7 @@ export class AssetsService {
       data: {
         internalCode,
         type: dto.type,
-        brand: dto.brand.trim(),
+        brand: normalizedBrand,
         model: this.trimToNull(dto.model),
         serialNumber: this.trimToNull(dto.serialNumber),
         valueCents: dto.valueCents,

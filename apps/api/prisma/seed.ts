@@ -56,10 +56,44 @@ async function main() {
     });
   }
 
+  const employees = [
+    {
+      name: 'Ana Souza',
+      email: 'ana.souza@inventario.local',
+      department: 'Financeiro',
+      position: 'Analista Financeira',
+    },
+    {
+      name: 'Bruno Lima',
+      email: 'bruno.lima@inventario.local',
+      department: 'RH',
+      position: 'Analista de RH',
+    },
+    {
+      name: 'Carlos Mendes',
+      email: 'carlos.mendes@inventario.local',
+      department: 'TI',
+      position: 'Tecnico de Suporte',
+    },
+  ];
+
+  for (const employee of employees) {
+    await prisma.employee.upsert({
+      where: { email: employee.email },
+      update: {
+        name: employee.name,
+        department: employee.department,
+        position: employee.position,
+      },
+      create: employee,
+    });
+  }
+
   console.log('Seed OK: counter asset = 1');
   console.log('Seed OK: admin@inventario.local criado/atualizado com role ADMIN');
   console.log('Seed OK: categorias iniciais criadas/atualizadas');
   console.log('Seed OK: locais iniciais criados/atualizados');
+  console.log('Seed OK: funcionarios iniciais criados/atualizados');
 }
 
 main()

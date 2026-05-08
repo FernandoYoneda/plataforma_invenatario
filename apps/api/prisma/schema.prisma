@@ -40,6 +40,18 @@ model User {
   assetsCreated Asset[] @relation("AssetsCreatedBy")
 }
 
+model Employee {
+  id         String   @id @default(uuid())
+  name       String
+  email      String   @unique
+  department String?
+  position   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  assignments Assignment[]
+}
+
 model Category {
   id          String   @id @default(uuid())
   name        String   @unique
@@ -84,7 +96,24 @@ model Asset {
   createdBy   User?   @relation("AssetsCreatedBy", fields: [createdById], references: [id])
   category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   location    Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  assignments Assignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Assignment {
+  id         String    @id @default(uuid())
+  assetId    String
+  employeeId String
+  assignedAt DateTime  @default(now())
+  returnedAt DateTime?
+  notes      String?
+  createdAt  DateTime  @default(now())
+
+  asset    Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([assetId, returnedAt])
+  @@index([employeeId, returnedAt])
 }

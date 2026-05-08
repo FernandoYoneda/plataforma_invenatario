@@ -9,7 +9,7 @@ import { Role } from '@prisma/client';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
 type RequestUser = {
-  role?: Role;
+  role?: Role | string;
 };
 
 @Injectable()
@@ -27,7 +27,7 @@ export class RolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<{ user?: RequestUser }>();
-    const userRole = request.user?.role;
+    const userRole = request.user?.role as Role | undefined;
 
     if (!userRole || !requiredRoles.includes(userRole)) {
       throw new ForbiddenException('Acesso restrito');

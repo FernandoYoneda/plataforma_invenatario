@@ -3,9 +3,15 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { createAsset } from "@/lib/api";
+import { createAsset, getCategories, getLocations } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
-import type { Asset, AssetStatus, AssetType } from "@/lib/types";
+import type {
+  Asset,
+  AssetStatus,
+  AssetType,
+  Category,
+  Location,
+} from "@/lib/types";
 
 const TYPES: { value: AssetType; label: string }[] = [
   { value: "DESKTOP", label: "Computador (Desktop)" },
@@ -51,6 +57,12 @@ export default function NewAssetModal({
   const [status, setStatus] = useState<AssetStatus>("ESTOQUE");
   const [valueBRL, setValueBRL] = useState("");
   const [notes, setNotes] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [locationId, setLocationId] = useState("");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [loadingReferences, setLoadingReferences] = useState(false);
+  const [referencesError, setReferencesError] = useState<string | null>(null);
 
   const brandInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -87,6 +99,59 @@ export default function NewAssetModal({
     return () => window.clearTimeout(id);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    let active = true;
+
+    async function loadReferences() {
+      const token = getAuthToken();
+
+      if (!token) {
+        if (!active) return;
+        setReferencesError("Sessao expirada. Faca login novamente.");
+        setCategories([]);
+        setLocations([]);
+        return;
+      }
+
+      setLoadingReferences(true);
+      setReferencesError(null);
+
+      try {
+        const [categoriesData, locationsData] = await Promise.all([
+          getCategories(token),
+          getLocations(token),
+        ]);
+
+        if (!active) return;
+        setCategories(categoriesData);
+        setLocations(locationsData);
+      } catch (err: unknown) {
+        if (!active) return;
+
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Nao foi possivel carregar categorias e locais.";
+
+        setReferencesError(message);
+        setCategories([]);
+        setLocations([]);
+      } finally {
+        if (active) {
+          setLoadingReferences(false);
+        }
+      }
+    }
+
+    loadReferences();
+
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
   const valueCents = useMemo(() => parseBRLToCents(valueBRL), [valueBRL]);
   const needsValue =
     type === "DESKTOP" || type === "NOTEBOOK" || type === "MONITOR";
@@ -105,6 +170,8 @@ export default function NewAssetModal({
     setStatus("ESTOQUE");
     setValueBRL("");
     setNotes("");
+    setCategoryId("");
+    setLocationId("");
     setError(null);
   }
 
@@ -146,6 +213,8 @@ export default function NewAssetModal({
             ? (valueCents as number)
             : (valueCents ?? null),
           notes: notes.trim() || null,
+          ...(categoryId ? { categoryId } : {}),
+          ...(locationId ? { locationId } : {}),
         },
         token,
       );
@@ -228,6 +297,48 @@ export default function NewAssetModal({
                 </label>
 
                 <label className="text-sm">
+                  <span className="font-medium text-[#374151]">Categoria</span>
+                  <select
+                    value={categoryId}
+                    onChange={(event) => setCategoryId(event.target.value)}
+                    disabled={loadingReferences}
+                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <option value="">
+                      {loadingReferences
+                        ? "Carregando categorias..."
+                        : "Sem categoria"}
+                    </option>
+                    {categories.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm">
+                  <span className="font-medium text-[#374151]">Localizacao</span>
+                  <select
+                    value={locationId}
+                    onChange={(event) => setLocationId(event.target.value)}
+                    disabled={loadingReferences}
+                    className="mt-1.5 w-full rounded-2xl border border-[#d7d4cd] bg-[#fcfaf7] px-4 py-3 text-[#111827] outline-none transition focus:border-[#8c5f46] focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <option value="">
+                      {loadingReferences
+                        ? "Carregando locais..."
+                        : "Sem localizacao"}
+                    </option>
+                    {locations.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm">
                   <span className="font-medium text-[#374151]">Marca *</span>
                   <input
                     ref={brandInputRef}
@@ -285,6 +396,12 @@ export default function NewAssetModal({
               {error && (
                 <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                   {error}
+                </div>
+              )}
+
+              {referencesError && (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  {referencesError}
                 </div>
               )}
 

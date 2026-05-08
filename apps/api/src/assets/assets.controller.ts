@@ -8,14 +8,21 @@ import {
   Patch,
   Delete,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { UseGuards } from '@nestjs/common';
+import { AssignmentsService } from '../assignments/assignments.service';
 import { AssetsService } from './assets.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { FindAssetsQueryDto } from './dto/find-assets-query.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
 
 @Controller('assets')
+@UseGuards(JwtAuthGuard)
 export class AssetsController {
-  constructor(private readonly assetsService: AssetsService) {}
+  constructor(
+    private readonly assetsService: AssetsService,
+    private readonly assignmentsService: AssignmentsService,
+  ) {}
 
   @Post()
   create(@Body() dto: CreateAssetDto) {
@@ -25,6 +32,11 @@ export class AssetsController {
   @Get()
   findAll(@Query() query: FindAssetsQueryDto) {
     return this.assetsService.findAll(query);
+  }
+
+  @Get(':id/history')
+  history(@Param('id') id: string) {
+    return this.assignmentsService.findAssetHistory(id);
   }
 
   @Get(':id')

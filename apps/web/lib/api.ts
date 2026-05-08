@@ -1,4 +1,9 @@
-import type { Asset, CreateAssetInput } from "./types";
+import type {
+  Asset,
+  Category,
+  CreateAssetInput,
+  Location,
+} from "./types";
 
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"
@@ -94,6 +99,20 @@ export async function login(payload: {
 
 export async function getAssets(token?: string | null) {
   return request<Asset[]>("/assets", {
+    method: "GET",
+    token,
+  });
+}
+
+export async function getCategories(token?: string | null) {
+  return request<Category[]>("/categories", {
+    method: "GET",
+    token,
+  });
+}
+
+export async function getLocations(token?: string | null) {
+  return request<Location[]>("/locations", {
     method: "GET",
     token,
   });
