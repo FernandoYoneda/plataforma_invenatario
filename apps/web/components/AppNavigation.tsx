@@ -5,7 +5,12 @@ import type { ReactNode } from "react";
 import BrandLogo from "./BrandLogo";
 import LogoutButton from "./LogoutButton";
 
-type NavKey = "dashboard" | "assets" | "employees";
+export type NavKey =
+  | "dashboard"
+  | "assets"
+  | "employees"
+  | "categories"
+  | "locations";
 
 function DashboardIcon() {
   return (
@@ -79,11 +84,11 @@ const mainItems: Array<{
   { key: "dashboard", href: "/dashboard", label: "Dashboard", icon: <DashboardIcon /> },
   { key: "assets", href: "/assets", label: "Assets", icon: <AssetsIcon /> },
   { key: "employees", href: "/employees", label: "Funcionarios", icon: <EmployeesIcon /> },
+  { key: "categories", href: "/categories", label: "Categorias", icon: <CategoriesIcon /> },
+  { key: "locations", href: "/locations", label: "Localizacoes", icon: <LocationsIcon /> },
 ];
 
 const futureItems = [
-  { label: "Categorias", icon: <CategoriesIcon /> },
-  { label: "Localizacoes", icon: <LocationsIcon /> },
   { label: "Relatorios", icon: <ReportsIcon /> },
 ];
 

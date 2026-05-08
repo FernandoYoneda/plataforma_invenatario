@@ -49,6 +49,10 @@ export type Asset = {
   status: AssetStatus;
   registeredAt: string;
   notes?: string | null;
+  categoryId?: string | null;
+  locationId?: string | null;
+  category?: Category | null;
+  location?: Location | null;
 };
 
 export type Assignment = {
@@ -80,6 +84,16 @@ export type CreateEmployeeInput = {
   email: string;
   department?: string | null;
   position?: string | null;
+};
+
+export type CreateCategoryInput = {
+  name: string;
+  description?: string | null;
+};
+
+export type CreateLocationInput = {
+  name: string;
+  description?: string | null;
 };
 
 export type CreateAssignmentInput = {

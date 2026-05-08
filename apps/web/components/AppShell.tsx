@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import type { NavKey } from "./AppNavigation";
 import AppNavigation from "./AppNavigation";
 
 export default function AppShell({
@@ -10,7 +11,7 @@ export default function AppShell({
   actions,
   children,
 }: {
-  current: "dashboard" | "assets" | "employees";
+  current: NavKey;
   title: string;
   subtitle: string;
   actions?: ReactNode;

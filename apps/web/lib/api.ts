@@ -4,7 +4,9 @@ import type {
   Category,
   CreateAssignmentInput,
   CreateAssetInput,
+  CreateCategoryInput,
   CreateEmployeeInput,
+  CreateLocationInput,
   Employee,
   Location,
   ReturnAssignmentInput,
@@ -134,9 +136,31 @@ export async function getCategories(token?: string | null) {
   });
 }
 
+export async function createCategory(
+  payload: CreateCategoryInput,
+  token?: string | null,
+) {
+  return request<Category>("/categories", {
+    method: "POST",
+    body: payload,
+    token,
+  });
+}
+
 export async function getLocations(token?: string | null) {
   return request<Location[]>("/locations", {
     method: "GET",
+    token,
+  });
+}
+
+export async function createLocation(
+  payload: CreateLocationInput,
+  token?: string | null,
+) {
+  return request<Location>("/locations", {
+    method: "POST",
+    body: payload,
     token,
   });
 }

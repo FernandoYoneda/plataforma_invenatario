@@ -1,16 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getActiveAssignments, getAssets } from "@/lib/api";
+import {
+  getActiveAssignments,
+  getAssets,
+  getCategories,
+  getLocations,
+} from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
-import type { Asset, Assignment } from "@/lib/types";
+import type {
+  Asset,
+  AssetStatus,
+  AssetType,
+  Assignment,
+  Category,
+  Location,
+} from "@/lib/types";
 import ActiveAssignmentsPanel from "./ActiveAssignmentsPanel";
 import AppShell from "./AppShell";
 import AssignAssetModal from "./AssignAssetModal";
 import AssetHistoryModal from "./AssetHistoryModal";
 import NewAssetModal from "./NewAssetModal";
+
+const TYPE_OPTIONS: { value: AssetType; label: string }[] = [
+  { value: "DESKTOP", label: "Desktop" },
+  { value: "NOTEBOOK", label: "Notebook" },
+  { value: "MONITOR", label: "Monitor" },
+  { value: "MOUSE", label: "Mouse" },
+  { value: "TECLADO", label: "Teclado" },
+  { value: "OUTRO", label: "Outro" },
+];
+
+const STATUS_OPTIONS: { value: AssetStatus; label: string }[] = [
+  { value: "EM_USO", label: "Em uso" },
+  { value: "ESTOQUE", label: "Estoque" },
+  { value: "MANUTENCAO", label: "Manutencao" },
+  { value: "BAIXADO", label: "Baixado" },
+];
 
 function moneyBRL(valueCents?: number | null) {
   if (valueCents == null) return "-";
@@ -22,27 +50,37 @@ function moneyBRL(valueCents?: number | null) {
 }
 
 function labelType(type: Asset["type"]) {
-  const labels: Record<Asset["type"], string> = {
-    DESKTOP: "Desktop",
-    NOTEBOOK: "Notebook",
-    MONITOR: "Monitor",
-    MOUSE: "Mouse",
-    TECLADO: "Teclado",
-    OUTRO: "Outro",
-  };
-
-  return labels[type] ?? type;
+  return TYPE_OPTIONS.find((item) => item.value === type)?.label ?? type;
 }
 
 function labelStatus(status: Asset["status"]) {
-  const labels: Record<Asset["status"], string> = {
-    EM_USO: "Em uso",
-    ESTOQUE: "Estoque",
-    MANUTENCAO: "Manutencao",
-    BAIXADO: "Baixado",
-  };
+  return STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
+}
 
-  return labels[status] ?? status;
+function assetCategoryId(asset: Asset) {
+  return asset.categoryId ?? asset.category?.id ?? "";
+}
+
+function assetLocationId(asset: Asset) {
+  return asset.locationId ?? asset.location?.id ?? "";
+}
+
+function assetCategoryName(asset: Asset, categories: Category[]) {
+  const id = assetCategoryId(asset);
+  return (
+    asset.category?.name ??
+    categories.find((item) => item.id === id)?.name ??
+    "-"
+  );
+}
+
+function assetLocationName(asset: Asset, locations: Location[]) {
+  const id = assetLocationId(asset);
+  return (
+    asset.location?.name ??
+    locations.find((item) => item.id === id)?.name ??
+    "-"
+  );
 }
 
 export default function AssetsList() {
@@ -55,6 +93,14 @@ export default function AssetsList() {
   const [loadingAssignments, setLoadingAssignments] = useState(true);
   const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [referencesError, setReferencesError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
 
   function handleAuthError(err: unknown) {
     if (
@@ -124,13 +170,88 @@ export default function AssetsList() {
     }
   }
 
+  async function loadReferences() {
+    const token = getAuthToken();
+
+    if (!token) {
+      setRedirecting(true);
+      router.replace("/login");
+      return;
+    }
+
+    try {
+      const [categoriesData, locationsData] = await Promise.all([
+        getCategories(token),
+        getLocations(token),
+      ]);
+
+      setCategories(categoriesData);
+      setLocations(locationsData);
+      setReferencesError(null);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Nao foi possivel carregar categorias e localizacoes.";
+
+      handleAuthError(err);
+      setReferencesError(message);
+    }
+  }
+
   useEffect(() => {
     async function load() {
-      await Promise.all([loadAssets(), loadActiveAssignments()]);
+      await Promise.all([loadAssets(), loadActiveAssignments(), loadReferences()]);
     }
 
     load();
   }, [router]);
+
+  const filteredAssets = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    return assets.filter((asset) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        [
+          asset.internalCode,
+          asset.brand,
+          asset.model ?? "",
+          asset.serialNumber ?? "",
+        ].some((value) => value.toLowerCase().includes(normalizedSearch));
+
+      const matchesStatus = !statusFilter || asset.status === statusFilter;
+      const matchesType = !typeFilter || asset.type === typeFilter;
+      const matchesCategory =
+        !categoryFilter || assetCategoryId(asset) === categoryFilter;
+      const matchesLocation =
+        !locationFilter || assetLocationId(asset) === locationFilter;
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesType &&
+        matchesCategory &&
+        matchesLocation
+      );
+    });
+  }, [assets, categoryFilter, locationFilter, search, statusFilter, typeFilter]);
+
+  const hasFilters = Boolean(
+    search.trim() ||
+      statusFilter ||
+      typeFilter ||
+      categoryFilter ||
+      locationFilter,
+  );
+
+  function clearFilters() {
+    setSearch("");
+    setStatusFilter("");
+    setTypeFilter("");
+    setCategoryFilter("");
+    setLocationFilter("");
+  }
 
   return (
     <AppShell
@@ -165,7 +286,9 @@ export default function AssetsList() {
                   ? "Redirecionando..."
                   : loading
                     ? "Carregando..."
-                    : `${assets.length} asset(s)`}
+                    : hasFilters
+                      ? `${filteredAssets.length} de ${assets.length} asset(s)`
+                      : `${assets.length} asset(s)`}
               </div>
               <Link
                 href="/login"
@@ -174,6 +297,111 @@ export default function AssetsList() {
                 Ir para login
               </Link>
             </div>
+
+            {!redirecting && !error && !loading ? (
+              <div className="border-b px-6 py-5 [border-color:var(--border-soft)]">
+                <div className="grid gap-4 lg:grid-cols-[minmax(14rem,1.4fr)_repeat(4,minmax(9rem,1fr))_auto] lg:items-end">
+                  <label className="block text-sm">
+                    <span className="font-medium [color:var(--text-primary)]">
+                      Buscar
+                    </span>
+                    <input
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      className="brand-input mt-1.5"
+                      placeholder="Codigo, marca, modelo ou serial"
+                    />
+                  </label>
+
+                  <label className="block text-sm">
+                    <span className="font-medium [color:var(--text-primary)]">
+                      Status
+                    </span>
+                    <select
+                      value={statusFilter}
+                      onChange={(event) => setStatusFilter(event.target.value)}
+                      className="brand-input mt-1.5"
+                    >
+                      <option value="">Todos</option>
+                      {STATUS_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block text-sm">
+                    <span className="font-medium [color:var(--text-primary)]">
+                      Tipo
+                    </span>
+                    <select
+                      value={typeFilter}
+                      onChange={(event) => setTypeFilter(event.target.value)}
+                      className="brand-input mt-1.5"
+                    >
+                      <option value="">Todos</option>
+                      {TYPE_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block text-sm">
+                    <span className="font-medium [color:var(--text-primary)]">
+                      Categoria
+                    </span>
+                    <select
+                      value={categoryFilter}
+                      onChange={(event) => setCategoryFilter(event.target.value)}
+                      className="brand-input mt-1.5"
+                    >
+                      <option value="">Todas</option>
+                      {categories.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block text-sm">
+                    <span className="font-medium [color:var(--text-primary)]">
+                      Localizacao
+                    </span>
+                    <select
+                      value={locationFilter}
+                      onChange={(event) => setLocationFilter(event.target.value)}
+                      className="brand-input mt-1.5"
+                    >
+                      <option value="">Todas</option>
+                      {locations.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    disabled={!hasFilters}
+                    className="btn-secondary px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Limpar filtros
+                  </button>
+                </div>
+
+                {referencesError ? (
+                  <div className="status-banner-warning mt-4 rounded-[22px] px-4 py-3 text-sm">
+                    {referencesError}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {redirecting ? (
               <div className="px-6 py-10 text-sm [color:var(--text-secondary)]">
@@ -189,7 +417,11 @@ export default function AssetsList() {
               </div>
             ) : assets.length === 0 ? (
               <div className="px-6 py-10 text-sm [color:var(--text-secondary)]">
-                Nenhum asset encontrado.
+                Nenhum ativo cadastrado
+              </div>
+            ) : filteredAssets.length === 0 ? (
+              <div className="px-6 py-10 text-sm [color:var(--text-secondary)]">
+                Nenhum ativo encontrado com esses filtros
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -202,12 +434,14 @@ export default function AssetsList() {
                       <th>Modelo</th>
                       <th>Serial</th>
                       <th>Status</th>
+                      <th>Categoria</th>
+                      <th>Localizacao</th>
                       <th className="text-right">Valor</th>
                       <th className="text-right">Acoes</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {assets.map((asset) => (
+                    {filteredAssets.map((asset) => (
                       <tr key={asset.id}>
                         <td className="cell-strong">{asset.internalCode}</td>
                         <td>{labelType(asset.type)}</td>
@@ -215,6 +449,8 @@ export default function AssetsList() {
                         <td>{asset.model ?? "-"}</td>
                         <td>{asset.serialNumber ?? "-"}</td>
                         <td>{labelStatus(asset.status)}</td>
+                        <td>{assetCategoryName(asset, categories)}</td>
+                        <td>{assetLocationName(asset, locations)}</td>
                         <td className="text-right">{moneyBRL(asset.valueCents)}</td>
                         <td>
                           <div className="flex justify-end gap-2">
