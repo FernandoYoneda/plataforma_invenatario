@@ -1,8 +1,13 @@
 import type {
   Asset,
+  Assignment,
   Category,
+  CreateAssignmentInput,
   CreateAssetInput,
+  CreateEmployeeInput,
+  Employee,
   Location,
+  ReturnAssignmentInput,
 } from "./types";
 
 const API_BASE_URL = (
@@ -104,6 +109,24 @@ export async function getAssets(token?: string | null) {
   });
 }
 
+export async function getEmployees(token?: string | null) {
+  return request<Employee[]>("/employees", {
+    method: "GET",
+    token,
+  });
+}
+
+export async function createEmployee(
+  payload: CreateEmployeeInput,
+  token?: string | null,
+) {
+  return request<Employee>("/employees", {
+    method: "POST",
+    body: payload,
+    token,
+  });
+}
+
 export async function getCategories(token?: string | null) {
   return request<Category[]>("/categories", {
     method: "GET",
@@ -125,6 +148,43 @@ export async function createAsset(
   return request<Asset>("/assets", {
     method: "POST",
     body: payload,
+    token,
+  });
+}
+
+export async function getActiveAssignments(token?: string | null) {
+  return request<Assignment[]>("/assignments/active", {
+    method: "GET",
+    token,
+  });
+}
+
+export async function createAssignment(
+  payload: CreateAssignmentInput,
+  token?: string | null,
+) {
+  return request<Assignment>("/assignments", {
+    method: "POST",
+    body: payload,
+    token,
+  });
+}
+
+export async function returnAssignment(
+  assignmentId: string,
+  payload: ReturnAssignmentInput,
+  token?: string | null,
+) {
+  return request<Assignment>(`/assignments/${assignmentId}/return`, {
+    method: "POST",
+    body: payload,
+    token,
+  });
+}
+
+export async function getAssetHistory(assetId: string, token?: string | null) {
+  return request<Assignment[]>(`/assets/${assetId}/history`, {
+    method: "GET",
     token,
   });
 }

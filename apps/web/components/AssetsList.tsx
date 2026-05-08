@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getAssets } from "@/lib/api";
+import { getActiveAssignments, getAssets } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
-import type { Asset } from "@/lib/types";
+import type { Asset, Assignment } from "@/lib/types";
+import ActiveAssignmentsPanel from "./ActiveAssignmentsPanel";
+import AssignAssetModal from "./AssignAssetModal";
+import AssetHistoryModal from "./AssetHistoryModal";
 import NewAssetModal from "./NewAssetModal";
 import LogoutButton from "./LogoutButton";
 
@@ -48,6 +51,26 @@ export default function AssetsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
+  const [activeAssignments, setActiveAssignments] = useState<Assignment[]>([]);
+  const [loadingAssignments, setLoadingAssignments] = useState(true);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+
+  function handleAuthError(err: unknown) {
+    if (
+      err instanceof Error &&
+      "status" in err &&
+      typeof err.status === "number" &&
+      err.status === 401
+    ) {
+      clearAuthToken();
+      setRedirecting(true);
+      router.replace("/login");
+      return true;
+    }
+
+    return false;
+  }
 
   async function loadAssets() {
     const token = getAuthToken();
@@ -67,16 +90,7 @@ export default function AssetsList() {
       const message =
         err instanceof Error ? err.message : "Nao foi possivel carregar os ativos.";
 
-      if (
-        err instanceof Error &&
-        "status" in err &&
-        typeof err.status === "number" &&
-        err.status === 401
-      ) {
-        clearAuthToken();
-        setRedirecting(true);
-        router.replace("/login");
-      }
+      handleAuthError(err);
 
       setError(message);
     } finally {
@@ -84,18 +98,39 @@ export default function AssetsList() {
     }
   }
 
-  useEffect(() => {
-    let active = true;
+  async function loadActiveAssignments() {
+    const token = getAuthToken();
 
+    if (!token) {
+      setRedirecting(true);
+      setLoadingAssignments(false);
+      router.replace("/login");
+      return;
+    }
+
+    try {
+      const data = await getActiveAssignments(token);
+      setActiveAssignments(data);
+      setAssignmentsError(null);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Nao foi possivel carregar os assignments ativos.";
+
+      handleAuthError(err);
+      setAssignmentsError(message);
+    } finally {
+      setLoadingAssignments(false);
+    }
+  }
+
+  useEffect(() => {
     async function load() {
-      await loadAssets();
+      await Promise.all([loadAssets(), loadActiveAssignments()]);
     }
 
     load();
-
-    return () => {
-      active = false;
-    };
   }, [router]);
 
   return (
@@ -124,6 +159,18 @@ export default function AssetsList() {
             <LogoutButton />
           </div>
         </header>
+
+        <ActiveAssignmentsPanel
+          assignments={activeAssignments}
+          loading={loadingAssignments}
+          error={assignmentsError}
+          onReturned={(assignmentId) => {
+            setActiveAssignments((current) =>
+              current.filter((item) => item.id !== assignmentId),
+            );
+            setHistoryRefreshKey((current) => current + 1);
+          }}
+        />
 
         <section className="overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.10)]">
           <div className="flex items-center justify-between border-b border-black/10 px-6 py-4">
@@ -168,6 +215,7 @@ export default function AssetsList() {
                     <th className="px-6 py-3 font-medium">Serial</th>
                     <th className="px-6 py-3 font-medium">Status</th>
                     <th className="px-6 py-3 text-right font-medium">Valor</th>
+                    <th className="px-6 py-3 text-right font-medium">Acoes</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -191,6 +239,26 @@ export default function AssetsList() {
                       </td>
                       <td className="px-6 py-4 text-right text-[#374151]">
                         {moneyBRL(asset.valueCents)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex justify-end gap-2">
+                          <AssignAssetModal
+                            asset={asset}
+                            onAssigned={(assignment) => {
+                              setActiveAssignments((current) => [
+                                assignment,
+                                ...current.filter(
+                                  (item) => item.assetId !== assignment.assetId,
+                                ),
+                              ]);
+                              setHistoryRefreshKey((current) => current + 1);
+                            }}
+                          />
+                          <AssetHistoryModal
+                            asset={asset}
+                            refreshKey={historyRefreshKey}
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}

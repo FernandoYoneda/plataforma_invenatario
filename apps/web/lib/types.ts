@@ -28,6 +28,16 @@ export type Location = {
   updatedAt: string;
 };
 
+export type Employee = {
+  id: string;
+  name: string;
+  email: string;
+  department?: string | null;
+  position?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type Asset = {
   id: string;
   internalCode: string;
@@ -41,6 +51,18 @@ export type Asset = {
   notes?: string | null;
 };
 
+export type Assignment = {
+  id: string;
+  assetId: string;
+  employeeId: string;
+  assignedAt: string;
+  returnedAt?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  asset?: Asset;
+  employee?: Employee;
+};
+
 export type CreateAssetInput = {
   type: AssetType;
   brand: string;
@@ -51,4 +73,21 @@ export type CreateAssetInput = {
   notes?: string | null;
   categoryId?: string;
   locationId?: string;
+};
+
+export type CreateEmployeeInput = {
+  name: string;
+  email: string;
+  department?: string | null;
+  position?: string | null;
+};
+
+export type CreateAssignmentInput = {
+  assetId: string;
+  employeeId: string;
+  notes?: string | null;
+};
+
+export type ReturnAssignmentInput = {
+  notes?: string | null;
 };
