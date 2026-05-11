@@ -120,12 +120,22 @@ export class AssetsService {
             }
           : {}),
       },
+      include: {
+        category: true,
+        location: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async findOne(id: string) {
-    const asset = await this.prisma.asset.findUnique({ where: { id } });
+    const asset = await this.prisma.asset.findUnique({
+      where: { id },
+      include: {
+        category: true,
+        location: true,
+      },
+    });
     if (!asset) throw new NotFoundException('Ativo nao encontrado');
 
     return asset;
