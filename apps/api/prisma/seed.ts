@@ -3,28 +3,42 @@ import * as bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, Role } from '@prisma/client';
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+function getRequiredEnv(name: string) {
+  const value = process.env[name]?.trim();
+
+  if (!value) {
+    throw new Error(`Variavel de ambiente obrigatoria ausente: ${name}`);
+  }
+
+  return value;
+}
+
+const adapter = new PrismaPg({ connectionString: getRequiredEnv('DATABASE_URL') });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  const adminEmail = getRequiredEnv('ADMIN_EMAIL').toLowerCase();
+  const adminPassword = getRequiredEnv('ADMIN_PASSWORD');
+  const adminName = getRequiredEnv('ADMIN_NAME');
+
   await prisma.counter.upsert({
     where: { key: 'asset' },
     update: {},
     create: { key: 'asset', nextNumber: 1 },
   });
 
-  const passwordHash = await bcrypt.hash('admin123', 10);
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
 
   await prisma.user.upsert({
-    where: { email: 'admin@inventario.local' },
+    where: { email: adminEmail },
     update: {
-      name: 'Administrador',
+      name: adminName,
       passwordHash,
       role: Role.ADMIN,
     },
     create: {
-      name: 'Administrador',
-      email: 'admin@inventario.local',
+      name: adminName,
+      email: adminEmail,
       passwordHash,
       role: Role.ADMIN,
     },
@@ -90,7 +104,7 @@ async function main() {
   }
 
   console.log('Seed OK: counter asset = 1');
-  console.log('Seed OK: admin@inventario.local criado/atualizado com role ADMIN');
+  console.log(`Seed OK: ${adminEmail} criado/atualizado com role ADMIN`);
   console.log('Seed OK: categorias iniciais criadas/atualizadas');
   console.log('Seed OK: locais iniciais criados/atualizados');
   console.log('Seed OK: funcionarios iniciais criados/atualizados');
