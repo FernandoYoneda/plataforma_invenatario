@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { Asset, AssetStatus, AssetType } from "@/lib/types";
+import { getCategories, getLocations, updateAsset } from "@/lib/api";
+import { getAuthToken } from "@/lib/auth";
+import type {
+  Asset,
+  AssetStatus,
+  AssetType,
+  Category,
+  Location,
+} from "@/lib/types";
 
 const TYPES: { value: AssetType; label: string }[] = [
   { value: "DESKTOP", label: "Computador (Desktop)" },
@@ -18,161 +26,242 @@ const TYPES: { value: AssetType; label: string }[] = [
 const STATUS: { value: AssetStatus; label: string }[] = [
   { value: "EM_USO", label: "Em uso" },
   { value: "ESTOQUE", label: "Estoque" },
-  { value: "MANUTENCAO", label: "Manutenção" },
+  { value: "MANUTENCAO", label: "Manutencao" },
   { value: "BAIXADO", label: "Baixado" },
 ];
 
-function parseBRLToCents(input: string): number | null {
-  const s = input.trim();
-  if (!s) return null;
-  const normalized = s.replace(/\./g, "").replace(",", ".");
-  const value = Number(normalized);
-  if (!Number.isFinite(value) || value < 0) return null;
-  return Math.round(value * 100);
+function currentCategoryId(asset: Asset) {
+  return asset.categoryId ?? asset.category?.id ?? "";
 }
 
-function centsToBRLInput(valueCents?: number | null) {
-  if (valueCents == null) return "";
-  const value = valueCents / 100;
-  return value.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+function currentLocationId(asset: Asset) {
+  return asset.locationId ?? asset.location?.id ?? "";
 }
 
-export default function EditAssetModal({ asset }: { asset: Asset }) {
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002";
+function friendlyUpdateError(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : "Nao foi possivel atualizar o asset.";
+
+  if (message.toLowerCase().includes("valuecents")) {
+    return "Este tipo exige valor cadastrado. Ajuste o asset antes de usar esse tipo.";
+  }
+
+  return message;
+}
+
+export default function EditAssetModal({
+  asset,
+  categories: providedCategories,
+  locations: providedLocations,
+  onUpdated,
+}: {
+  asset: Asset;
+  categories?: Category[];
+  locations?: Location[];
+  onUpdated?: (asset: Asset) => void;
+}) {
   const router = useRouter();
-
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [type, setType] = useState<AssetType>(asset.type);
-  const [brand, setBrand] = useState(asset.brand ?? "");
+  const [brand, setBrand] = useState(asset.brand);
   const [model, setModel] = useState(asset.model ?? "");
   const [serialNumber, setSerialNumber] = useState(asset.serialNumber ?? "");
   const [status, setStatus] = useState<AssetStatus>(asset.status);
-  const [valueBRL, setValueBRL] = useState(centsToBRLInput(asset.valueCents));
+  const [categoryId, setCategoryId] = useState(currentCategoryId(asset));
+  const [locationId, setLocationId] = useState(currentLocationId(asset));
   const [notes, setNotes] = useState(asset.notes ?? "");
+  const [categories, setCategories] = useState<Category[]>(
+    providedCategories ?? [],
+  );
+  const [locations, setLocations] = useState<Location[]>(
+    providedLocations ?? [],
+  );
+  const [loadingReferences, setLoadingReferences] = useState(false);
+  const [referencesError, setReferencesError] = useState<string | null>(null);
 
   const brandInputRef = useRef<HTMLInputElement | null>(null);
 
-  // portal só no client
   useEffect(() => setMounted(true), []);
 
-  // trava scroll quando abrir (✅ só 1 efeito)
+  useEffect(() => {
+    if (providedCategories) {
+      setCategories(providedCategories);
+    }
+  }, [providedCategories]);
+
+  useEffect(() => {
+    if (providedLocations) {
+      setLocations(providedLocations);
+    }
+  }, [providedLocations]);
+
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
+
+    setType(asset.type);
+    setBrand(asset.brand);
+    setModel(asset.model ?? "");
+    setSerialNumber(asset.serialNumber ?? "");
+    setStatus(asset.status);
+    setCategoryId(currentCategoryId(asset));
+    setLocationId(currentLocationId(asset));
+    setNotes(asset.notes ?? "");
+    setError(null);
+  }, [asset, open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
-      document.body.style.overflow = prev || "";
+      document.body.style.overflow = previousOverflow || "";
     };
   }, [open]);
 
-  // ESC fecha
+  useEffect(() => {
+    if (!open || (providedCategories && providedLocations)) return;
+
+    let active = true;
+
+    async function loadReferences() {
+      const token = getAuthToken();
+
+      if (!token) {
+        if (!active) return;
+        setReferencesError("Sessao expirada. Faca login novamente.");
+        return;
+      }
+
+      setLoadingReferences(true);
+      setReferencesError(null);
+
+      try {
+        const [categoriesData, locationsData] = await Promise.all([
+          getCategories(token),
+          getLocations(token),
+        ]);
+
+        if (!active) return;
+        setCategories(categoriesData);
+        setLocations(locationsData);
+      } catch (err: unknown) {
+        if (!active) return;
+
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Nao foi possivel carregar categorias e localizacoes.";
+        setReferencesError(message);
+      } finally {
+        if (active) {
+          setLoadingReferences(false);
+        }
+      }
+    }
+
+    loadReferences();
+
+    return () => {
+      active = false;
+    };
+  }, [open, providedCategories, providedLocations]);
+
   useEffect(() => {
     if (!open) return;
 
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !loading) setOpen(false);
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !loading) {
+        setOpen(false);
+      }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, loading]);
 
-  // Sempre que abrir, sincroniza com o asset atual
   useEffect(() => {
     if (!open) return;
 
-    setType(asset.type);
-    setBrand(asset.brand ?? "");
-    setModel(asset.model ?? "");
-    setSerialNumber(asset.serialNumber ?? "");
-    setStatus(asset.status);
-    setValueBRL(centsToBRLInput(asset.valueCents));
-    setNotes(asset.notes ?? "");
-    setError(null);
-  }, [open, asset]);
-
-  // foco automático no primeiro campo
-  useEffect(() => {
-    if (!open) return;
-    const id = setTimeout(() => brandInputRef.current?.focus(), 0);
-    return () => clearTimeout(id);
+    const id = window.setTimeout(() => brandInputRef.current?.focus(), 0);
+    return () => window.clearTimeout(id);
   }, [open]);
 
-  const valueCents = useMemo(() => parseBRLToCents(valueBRL), [valueBRL]);
-  const needsValue =
-    type === "DESKTOP" || type === "NOTEBOOK" || type === "MONITOR";
+  const selectedCategory = useMemo(
+    () => categories.find((item) => item.id === categoryId) ?? null,
+    [categories, categoryId],
+  );
+  const selectedLocation = useMemo(
+    () => locations.find((item) => item.id === locationId) ?? null,
+    [locations, locationId],
+  );
 
   function close() {
-    if (!loading) setOpen(false);
+    if (!loading) {
+      setOpen(false);
+    }
   }
 
-  async function submit() {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setError(null);
 
     if (!brand.trim()) {
-      const message = "Marca é obrigatória.";
+      const message = "Marca e obrigatoria.";
       setError(message);
       toast.error(message);
       return;
     }
 
-    if (needsValue && valueCents == null) {
-      const message = "Valor é obrigatório para Desktop/Notebook/Monitor.";
+    const token = getAuthToken();
+
+    if (!token) {
+      const message = "Sessao expirada. Faca login novamente.";
       setError(message);
       toast.error(message);
       return;
     }
 
     setLoading(true);
+
     try {
-      const payload: {
-        type: AssetType;
-        brand: string;
-        model: string | null;
-        serialNumber: string | null;
-        status: AssetStatus;
-        valueCents?: number;
-        notes: string | null;
-      } = {
-        type,
-        brand: brand.trim(),
-        model: model.trim() || null,
-        serialNumber: serialNumber.trim() || null,
-        status,
-        notes: notes.trim() || null,
+      const updated = await updateAsset(
+        asset.id,
+        {
+          type,
+          brand: brand.trim(),
+          model: model.trim() || null,
+          serialNumber: serialNumber.trim() || null,
+          status,
+          categoryId: categoryId || null,
+          locationId: locationId || null,
+          notes: notes.trim() || null,
+        },
+        token,
+      );
+
+      const mergedAsset: Asset = {
+        ...asset,
+        ...updated,
+        categoryId: categoryId || null,
+        locationId: locationId || null,
+        category: selectedCategory,
+        location: selectedLocation,
       };
 
-      if (needsValue) {
-        payload.valueCents = valueCents as number;
-      } else {
-        if (valueCents != null) payload.valueCents = valueCents;
-      }
-
-      const res = await fetch(`${apiBase}/assets/${asset.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || "Falha ao atualizar ativo.");
-      }
-
-      toast.success("Ativo atualizado com sucesso");
+      toast.success("Asset atualizado com sucesso.");
       setOpen(false);
-      router.refresh();
-    } catch (e: unknown) {
-      const message =
-        e instanceof Error ? e.message : "Erro ao atualizar ativo.";
+      onUpdated?.(mergedAsset);
+      if (!onUpdated) {
+        router.refresh();
+      }
+    } catch (err: unknown) {
+      const message = friendlyUpdateError(err);
       setError(message);
       toast.error(message);
     } finally {
@@ -181,143 +270,203 @@ export default function EditAssetModal({ asset }: { asset: Asset }) {
   }
 
   const modal = (
-    <div className="fixed inset-0 z-[99999]">
-      <div className="absolute inset-0 bg-black/70" onClick={close} />
+    <div className="fixed inset-0 z-[99999]" onClick={close}>
+      <div className="absolute inset-0 bg-[rgba(23,58,67,0.66)] backdrop-blur-[3px]" />
 
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
-          className="w-full max-w-xl overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
+          className="glass-panel w-full max-w-2xl overflow-hidden rounded-[30px]"
+          onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
-            <h2 className="text-base font-semibold">
-              Editar ativo{" "}
-              <span className="text-[var(--muted)]">
-                ({asset.internalCode})
-              </span>
-            </h2>
+          <div className="flex items-center justify-between border-b px-6 py-5 [border-color:var(--border-soft)]">
+            <div>
+              <p className="eyebrow">Edicao</p>
+              <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
+                Editar Asset
+              </h2>
+              <p className="mt-1 text-sm [color:var(--text-secondary)]">
+                {asset.internalCode}
+              </p>
+            </div>
 
             <button
               type="button"
               onClick={close}
-              className="rounded-lg border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:bg-white/5"
+              disabled={loading}
+              className="btn-secondary px-3 py-2 text-sm disabled:opacity-50"
             >
               Fechar
             </button>
           </div>
 
-          <div className="max-h-[75vh] overflow-auto p-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">Tipo</span>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value as AssetType)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                >
-                  {TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
+          <form onSubmit={submit}>
+            <div className="max-h-[75vh] overflow-auto px-6 py-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="text-sm">
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Tipo
+                  </span>
+                  <select
+                    value={type}
+                    onChange={(event) => setType(event.target.value as AssetType)}
+                    className="brand-input mt-1.5"
+                  >
+                    {TYPES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm">
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Status
+                  </span>
+                  <select
+                    value={status}
+                    onChange={(event) =>
+                      setStatus(event.target.value as AssetStatus)
+                    }
+                    className="brand-input mt-1.5"
+                  >
+                    {STATUS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm">
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Categoria
+                  </span>
+                  <select
+                    value={categoryId}
+                    onChange={(event) => setCategoryId(event.target.value)}
+                    disabled={loadingReferences}
+                    className="brand-input mt-1.5 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <option value="">
+                      {loadingReferences
+                        ? "Carregando categorias..."
+                        : "Sem categoria"}
                     </option>
-                  ))}
-                </select>
-              </label>
+                    {categories.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">Status</span>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as AssetStatus)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                >
-                  {STATUS.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
+                <label className="text-sm">
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Localizacao
+                  </span>
+                  <select
+                    value={locationId}
+                    onChange={(event) => setLocationId(event.target.value)}
+                    disabled={loadingReferences}
+                    className="brand-input mt-1.5 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <option value="">
+                      {loadingReferences
+                        ? "Carregando localizacoes..."
+                        : "Sem localizacao"}
                     </option>
-                  ))}
-                </select>
-              </label>
+                    {locations.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">Marca *</span>
-                <input
-                  ref={brandInputRef}
-                  value={brand}
-                  onChange={(e) => setBrand(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  placeholder="Ex.: Dell, LG..."
-                />
-              </label>
+                <label className="text-sm">
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Marca *
+                  </span>
+                  <input
+                    ref={brandInputRef}
+                    value={brand}
+                    onChange={(event) => setBrand(event.target.value)}
+                    className="brand-input mt-1.5"
+                    placeholder="Dell, LG, Logitech..."
+                  />
+                </label>
 
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">Modelo</span>
-                <input
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  placeholder="Ex.: Latitude 5420..."
-                />
-              </label>
+                <label className="text-sm">
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Modelo
+                  </span>
+                  <input
+                    value={model}
+                    onChange={(event) => setModel(event.target.value)}
+                    className="brand-input mt-1.5"
+                    placeholder="Latitude 5420, UltraSharp..."
+                  />
+                </label>
 
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">Serial</span>
-                <input
-                  value={serialNumber}
-                  onChange={(e) => setSerialNumber(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  placeholder="Ex.: ABC123..."
-                />
-              </label>
+                <label className="text-sm">
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Serial
+                  </span>
+                  <input
+                    value={serialNumber}
+                    onChange={(event) => setSerialNumber(event.target.value)}
+                    className="brand-input mt-1.5"
+                    placeholder="ABC123456"
+                  />
+                </label>
 
-              <label className="text-sm">
-                <span className="text-[var(--muted)]">
-                  Valor {needsValue ? "*" : "(opcional)"} (R$)
-                </span>
-                <input
-                  value={valueBRL}
-                  onChange={(e) => setValueBRL(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  placeholder="Ex.: 3500,00"
-                />
-              </label>
+                <label className="text-sm sm:col-span-2">
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Observacoes
+                  </span>
+                  <textarea
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    className="brand-input mt-1.5"
+                    rows={4}
+                    placeholder="Observacoes opcionais sobre o asset."
+                  />
+                </label>
+              </div>
 
-              <label className="text-sm sm:col-span-2">
-                <span className="text-[var(--muted)]">Observações</span>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2"
-                  rows={3}
-                />
-              </label>
+              {error && (
+                <div className="status-banner-error mt-4 rounded-[22px] px-4 py-3 text-sm">
+                  {error}
+                </div>
+              )}
+
+              {referencesError && (
+                <div className="status-banner-warning mt-4 rounded-[22px] px-4 py-3 text-sm">
+                  {referencesError}
+                </div>
+              )}
             </div>
 
-            {error && (
-              <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-                {error}
-              </div>
-            )}
-          </div>
+            <div className="flex justify-end gap-3 border-t px-6 py-5 [border-color:var(--border-soft)]">
+              <button
+                type="button"
+                onClick={close}
+                disabled={loading}
+                className="btn-secondary px-4 py-3 text-sm disabled:opacity-50"
+              >
+                Cancelar
+              </button>
 
-          <div className="flex justify-end gap-2 border-t border-[var(--border)] px-4 py-3">
-            <button
-              type="button"
-              onClick={close}
-              disabled={loading}
-              className="rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm hover:brightness-110 disabled:opacity-50"
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="button"
-              onClick={submit}
-              disabled={loading}
-              className="rounded-xl border border-[var(--border)] bg-white/15 px-3 py-2 text-sm hover:bg-white/20 disabled:opacity-50"
-            >
-              {loading ? "Salvando..." : "Salvar"}
-            </button>
-          </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {loading ? "Salvando..." : "Salvar alteracoes"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -327,10 +476,13 @@ export default function EditAssetModal({ asset }: { asset: Asset }) {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-xl border border-[var(--border)] bg-white/10 px-3 py-2 text-sm hover:bg-white/15"
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
+        className="action-button"
       >
-        ✎ Editar
+        Editar
       </button>
 
       {open && mounted ? createPortal(modal, document.body) : null}

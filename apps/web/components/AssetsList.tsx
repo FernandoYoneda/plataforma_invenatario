@@ -22,6 +22,7 @@ import ActiveAssignmentsPanel from "./ActiveAssignmentsPanel";
 import AppShell from "./AppShell";
 import AssignAssetModal from "./AssignAssetModal";
 import AssetHistoryModal from "./AssetHistoryModal";
+import EditAssetModal from "./EditAssetModal";
 import NewAssetModal from "./NewAssetModal";
 
 const TYPE_OPTIONS: { value: AssetType; label: string }[] = [
@@ -39,6 +40,19 @@ const STATUS_OPTIONS: { value: AssetStatus; label: string }[] = [
   { value: "MANUTENCAO", label: "Manutencao" },
   { value: "BAIXADO", label: "Baixado" },
 ];
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+
+type SortKey =
+  | "internalCode"
+  | "type"
+  | "brand"
+  | "model"
+  | "status"
+  | "category"
+  | "location";
+
+type SortDirection = "asc" | "desc";
 
 function moneyBRL(valueCents?: number | null) {
   if (valueCents == null) return "-";
@@ -83,6 +97,20 @@ function assetLocationName(asset: Asset, locations: Location[]) {
   );
 }
 
+function sortValue(asset: Asset, key: SortKey, categories: Category[], locations: Location[]) {
+  const values: Record<SortKey, string> = {
+    internalCode: asset.internalCode,
+    type: labelType(asset.type),
+    brand: asset.brand,
+    model: asset.model ?? "",
+    status: labelStatus(asset.status),
+    category: assetCategoryName(asset, categories),
+    location: assetLocationName(asset, locations),
+  };
+
+  return values[key];
+}
+
 export default function AssetsList() {
   const router = useRouter();
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -101,6 +129,10 @@ export default function AssetsList() {
   const [typeFilter, setTypeFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("internalCode");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   function handleAuthError(err: unknown) {
     if (
@@ -237,6 +269,41 @@ export default function AssetsList() {
     });
   }, [assets, categoryFilter, locationFilter, search, statusFilter, typeFilter]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [categoryFilter, locationFilter, search, statusFilter, typeFilter]);
+
+  const sortedAssets = useMemo(() => {
+    return [...filteredAssets].sort((a, b) => {
+      const aValue = sortValue(a, sortKey, categories, locations);
+      const bValue = sortValue(b, sortKey, categories, locations);
+      const result = aValue.localeCompare(bValue, "pt-BR", {
+        numeric: true,
+        sensitivity: "base",
+      });
+
+      if (result !== 0) {
+        return sortDirection === "asc" ? result : -result;
+      }
+
+      return a.internalCode.localeCompare(b.internalCode, "pt-BR", {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
+  }, [categories, filteredAssets, locations, sortDirection, sortKey]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedAssets.length / pageSize));
+  const pageStartIndex = (currentPage - 1) * pageSize;
+  const pageEndIndex = Math.min(pageStartIndex + pageSize, sortedAssets.length);
+  const paginatedAssets = sortedAssets.slice(pageStartIndex, pageEndIndex);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const hasFilters = Boolean(
     search.trim() ||
       statusFilter ||
@@ -251,6 +318,39 @@ export default function AssetsList() {
     setTypeFilter("");
     setCategoryFilter("");
     setLocationFilter("");
+  }
+
+  function handleSort(nextKey: SortKey) {
+    if (sortKey === nextKey) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(nextKey);
+    setSortDirection("asc");
+  }
+
+  function sortLabel(key: SortKey) {
+    if (sortKey !== key) return "";
+
+    return sortDirection === "asc" ? " ASC" : " DESC";
+  }
+
+  function sortableHeader(key: SortKey, label: string) {
+    return (
+      <button
+        type="button"
+        onClick={() => handleSort(key)}
+        className="inline-flex items-center gap-1 text-left font-semibold uppercase tracking-[0.08em] [color:inherit]"
+      >
+        <span>{label}</span>
+        {sortKey === key ? (
+          <span className="text-[0.62rem] [color:var(--brand-coral-500)]">
+            {sortLabel(key)}
+          </span>
+        ) : null}
+      </button>
+    );
   }
 
   return (
@@ -424,59 +524,135 @@ export default function AssetsList() {
                 Nenhum ativo encontrado com esses filtros
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="data-table data-table-compact">
-                  <thead>
-                    <tr>
-                      <th>Codigo</th>
-                      <th>Tipo</th>
-                      <th>Marca</th>
-                      <th>Modelo</th>
-                      <th>Serial</th>
-                      <th>Status</th>
-                      <th>Categoria</th>
-                      <th>Localizacao</th>
-                      <th className="text-right">Valor</th>
-                      <th className="text-right">Acoes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAssets.map((asset) => (
-                      <tr key={asset.id}>
-                        <td className="cell-strong">{asset.internalCode}</td>
-                        <td>{labelType(asset.type)}</td>
-                        <td>{asset.brand}</td>
-                        <td>{asset.model ?? "-"}</td>
-                        <td>{asset.serialNumber ?? "-"}</td>
-                        <td>{labelStatus(asset.status)}</td>
-                        <td>{assetCategoryName(asset, categories)}</td>
-                        <td>{assetLocationName(asset, locations)}</td>
-                        <td className="text-right">{moneyBRL(asset.valueCents)}</td>
-                        <td>
-                          <div className="flex justify-end gap-2">
-                            <AssignAssetModal
-                              asset={asset}
-                              onAssigned={(assignment) => {
-                                setActiveAssignments((current) => [
-                                  assignment,
-                                  ...current.filter(
-                                    (item) => item.assetId !== assignment.assetId,
-                                  ),
-                                ]);
-                                setHistoryRefreshKey((current) => current + 1);
-                              }}
-                            />
-                            <AssetHistoryModal
-                              asset={asset}
-                              refreshKey={historyRefreshKey}
-                            />
-                          </div>
-                        </td>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="data-table data-table-compact">
+                    <thead>
+                      <tr>
+                        <th>{sortableHeader("internalCode", "Codigo")}</th>
+                        <th>{sortableHeader("type", "Tipo")}</th>
+                        <th>{sortableHeader("brand", "Marca")}</th>
+                        <th>{sortableHeader("model", "Modelo")}</th>
+                        <th>Serial</th>
+                        <th>{sortableHeader("status", "Status")}</th>
+                        <th>{sortableHeader("category", "Categoria")}</th>
+                        <th>{sortableHeader("location", "Localizacao")}</th>
+                        <th className="text-right">Valor</th>
+                        <th className="text-right">Acoes</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {paginatedAssets.map((asset) => (
+                        <tr key={asset.id}>
+                          <td className="cell-strong">{asset.internalCode}</td>
+                          <td>{labelType(asset.type)}</td>
+                          <td>{asset.brand}</td>
+                          <td>{asset.model ?? "-"}</td>
+                          <td>{asset.serialNumber ?? "-"}</td>
+                          <td>{labelStatus(asset.status)}</td>
+                          <td>{assetCategoryName(asset, categories)}</td>
+                          <td>{assetLocationName(asset, locations)}</td>
+                          <td className="text-right">{moneyBRL(asset.valueCents)}</td>
+                          <td>
+                            <div className="flex justify-end gap-2">
+                              <AssignAssetModal
+                                asset={asset}
+                                onAssigned={(assignment) => {
+                                  setActiveAssignments((current) => [
+                                    assignment,
+                                    ...current.filter(
+                                      (item) =>
+                                        item.assetId !== assignment.assetId,
+                                    ),
+                                  ]);
+                                  setHistoryRefreshKey((current) => current + 1);
+                                }}
+                              />
+                              <EditAssetModal
+                                asset={asset}
+                                categories={categories}
+                                locations={locations}
+                                onUpdated={(updatedAsset) => {
+                                  setAssets((current) =>
+                                    current.map((item) =>
+                                      item.id === updatedAsset.id
+                                        ? updatedAsset
+                                        : item,
+                                    ),
+                                  );
+                                  setError(null);
+                                  setHistoryRefreshKey((current) => current + 1);
+                                }}
+                              />
+                              <AssetHistoryModal
+                                asset={asset}
+                                refreshKey={historyRefreshKey}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex flex-col gap-4 border-t px-6 py-5 [border-color:var(--border-soft)] lg:flex-row lg:items-center lg:justify-between">
+                  <div className="text-sm [color:var(--text-secondary)]">
+                    Mostrando {pageStartIndex + 1}-{pageEndIndex} de{" "}
+                    {sortedAssets.length} asset(s)
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                    <label className="flex items-center gap-2 text-sm [color:var(--text-secondary)]">
+                      <span>Itens por pagina</span>
+                      <select
+                        value={pageSize}
+                        onChange={(event) => {
+                          setPageSize(Number(event.target.value));
+                          setCurrentPage(1);
+                        }}
+                        className="brand-input w-auto min-w-24 py-2 text-sm"
+                      >
+                        {PAGE_SIZE_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCurrentPage((current) => Math.max(current - 1, 1))
+                        }
+                        disabled={currentPage === 1}
+                        className="btn-secondary px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Anterior
+                      </button>
+
+                      <span className="status-pill">
+                        Pagina {currentPage} de {totalPages}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCurrentPage((current) =>
+                            Math.min(current + 1, totalPages),
+                          )
+                        }
+                        disabled={currentPage === totalPages}
+                        className="btn-secondary px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Proxima
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </section>
     </AppShell>

@@ -2,8 +2,10 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { AssetType } from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { FindAssetsQueryDto } from './dto/find-assets-query.dto';
@@ -11,7 +13,10 @@ import { UpdateAssetDto } from './dto/update-asset.dto';
 
 @Injectable()
 export class AssetsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private readonly auditLogs?: AuditLogsService,
+  ) {}
 
   private readonly typedAssets = new Set<AssetType>([
     AssetType.DESKTOP,
@@ -53,7 +58,7 @@ export class AssetsService {
     });
   }
 
-  async create(dto: CreateAssetDto) {
+  async create(dto: CreateAssetDto, userId?: string | null) {
     this.ensureValueForTypedAsset(dto.type, dto.valueCents);
     const normalizedBrand = this.trimToUndefined(dto.brand);
 
@@ -63,7 +68,7 @@ export class AssetsService {
 
     const internalCode = await this.generateInternalCode();
 
-    return this.prisma.asset.create({
+    const asset = await this.prisma.asset.create({
       data: {
         internalCode,
         type: dto.type,
@@ -75,6 +80,16 @@ export class AssetsService {
         notes: this.trimToNull(dto.notes),
       },
     });
+
+    await this.auditLogs?.create({
+      action: 'ASSET_CREATED',
+      entityType: 'Asset',
+      entityId: asset.id,
+      description: `Asset ${asset.internalCode} criado`,
+      userId,
+    });
+
+    return asset;
   }
 
   async findAll(filters: FindAssetsQueryDto) {
@@ -141,7 +156,7 @@ export class AssetsService {
     return asset;
   }
 
-  async update(id: string, dto: UpdateAssetDto) {
+  async update(id: string, dto: UpdateAssetDto, userId?: string | null) {
     const exists = await this.prisma.asset.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Ativo nao encontrado');
 
@@ -151,7 +166,7 @@ export class AssetsService {
 
     this.ensureValueForTypedAsset(nextType, nextValueCents);
 
-    return this.prisma.asset.update({
+    const asset = await this.prisma.asset.update({
       where: { id },
       data: {
         ...(dto.type !== undefined && { type: dto.type }),
@@ -170,7 +185,21 @@ export class AssetsService {
           notes: this.trimToNull(dto.notes),
         }),
       },
+      include: {
+        category: true,
+        location: true,
+      },
     });
+
+    await this.auditLogs?.create({
+      action: 'ASSET_UPDATED',
+      entityType: 'Asset',
+      entityId: asset.id,
+      description: `Asset ${asset.internalCode} atualizado`,
+      userId,
+    });
+
+    return asset;
   }
 
   async remove(id: string) {

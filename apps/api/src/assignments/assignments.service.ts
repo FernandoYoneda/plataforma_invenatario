@@ -2,14 +2,19 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { ReturnAssignmentDto } from './dto/return-assignment.dto';
 
 @Injectable()
 export class AssignmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly auditLogs?: AuditLogsService,
+  ) {}
 
   private trimToNull(value?: string | null) {
     if (typeof value !== 'string') return null;
@@ -18,7 +23,7 @@ export class AssignmentsService {
     return trimmed.length > 0 ? trimmed : null;
   }
 
-  async create(dto: CreateAssignmentDto) {
+  async create(dto: CreateAssignmentDto, userId?: string | null) {
     const asset = await this.prisma.asset.findUnique({
       where: { id: dto.assetId },
     });
@@ -40,7 +45,7 @@ export class AssignmentsService {
       throw new BadRequestException('Ativo ja possui atribuicao ativa');
     }
 
-    return this.prisma.assignment.create({
+    const assignment = await this.prisma.assignment.create({
       data: {
         assetId: dto.assetId,
         employeeId: dto.employeeId,
@@ -51,9 +56,23 @@ export class AssignmentsService {
         employee: true,
       },
     });
+
+    await this.auditLogs?.create({
+      action: 'ASSIGNMENT_CREATED',
+      entityType: 'Assignment',
+      entityId: assignment.id,
+      description: `Asset ${assignment.asset.internalCode} atribuido para ${assignment.employee.name}`,
+      userId,
+    });
+
+    return assignment;
   }
 
-  async returnAssignment(id: string, dto: ReturnAssignmentDto) {
+  async returnAssignment(
+    id: string,
+    dto: ReturnAssignmentDto,
+    userId?: string | null,
+  ) {
     const assignment = await this.prisma.assignment.findUnique({
       where: { id },
     });
@@ -66,7 +85,7 @@ export class AssignmentsService {
       throw new BadRequestException('Atribuicao ja foi encerrada');
     }
 
-    return this.prisma.assignment.update({
+    const returnedAssignment = await this.prisma.assignment.update({
       where: { id },
       data: {
         returnedAt: new Date(),
@@ -77,6 +96,16 @@ export class AssignmentsService {
         employee: true,
       },
     });
+
+    await this.auditLogs?.create({
+      action: 'ASSIGNMENT_RETURNED',
+      entityType: 'Assignment',
+      entityId: returnedAssignment.id,
+      description: `Asset ${returnedAssignment.asset.internalCode} devolvido por ${returnedAssignment.employee.name}`,
+      userId,
+    });
+
+    return returnedAssignment;
   }
 
   findActive() {

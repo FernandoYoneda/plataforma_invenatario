@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
@@ -15,6 +16,12 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeesService } from './employees.service';
+
+type AuthenticatedRequest = {
+  user?: {
+    id?: string;
+  };
+};
 
 @Controller('employees')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -28,8 +35,8 @@ export class EmployeesController {
 
   @Post()
   @Roles(Role.ADMIN)
-  create(@Body() dto: CreateEmployeeDto) {
-    return this.employeesService.create(dto);
+  create(@Body() dto: CreateEmployeeDto, @Req() req: AuthenticatedRequest) {
+    return this.employeesService.create(dto, req.user?.id);
   }
 
   @Patch(':id')

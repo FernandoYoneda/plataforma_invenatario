@@ -38,6 +38,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   assetsCreated Asset[] @relation("AssetsCreatedBy")
+  auditLogs     AuditLog[]
 }
 
 model Employee {
@@ -116,4 +117,20 @@ model Assignment {
 
   @@index([assetId, returnedAt])
   @@index([employeeId, returnedAt])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  entityType  String
+  entityId    String
+  description String
+  userId      String?
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([userId])
 }

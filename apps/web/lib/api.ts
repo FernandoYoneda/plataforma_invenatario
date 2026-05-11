@@ -1,4 +1,5 @@
 import type {
+  AuditLog,
   Asset,
   Assignment,
   Category,
@@ -10,6 +11,7 @@ import type {
   Employee,
   Location,
   ReturnAssignmentInput,
+  UpdateAssetInput,
 } from "./types";
 
 const API_BASE_URL = (
@@ -176,6 +178,18 @@ export async function createAsset(
   });
 }
 
+export async function updateAsset(
+  assetId: string,
+  payload: UpdateAssetInput,
+  token?: string | null,
+) {
+  return request<Asset>(`/assets/${assetId}`, {
+    method: "PATCH",
+    body: payload,
+    token,
+  });
+}
+
 export async function getActiveAssignments(token?: string | null) {
   return request<Assignment[]>("/assignments/active", {
     method: "GET",
@@ -208,6 +222,13 @@ export async function returnAssignment(
 
 export async function getAssetHistory(assetId: string, token?: string | null) {
   return request<Assignment[]>(`/assets/${assetId}/history`, {
+    method: "GET",
+    token,
+  });
+}
+
+export async function getAuditLogs(token?: string | null) {
+  return request<AuditLog[]>("/audit-logs", {
     method: "GET",
     token,
   });

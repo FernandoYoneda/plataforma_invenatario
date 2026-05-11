@@ -11,7 +11,8 @@ export type NavKey =
   | "employees"
   | "categories"
   | "locations"
-  | "reports";
+  | "reports"
+  | "audit";
 
 function DashboardIcon() {
   return (
@@ -76,6 +77,17 @@ function ReportsIcon() {
   );
 }
 
+function AuditIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path d="M8 3h8l3 3v15H5V3h3Z" />
+      <path d="M15 3v4h4" />
+      <path d="M8 12h8" />
+      <path d="M8 16h5" />
+    </svg>
+  );
+}
+
 const mainItems: Array<{
   key: NavKey;
   href: string;
@@ -88,6 +100,7 @@ const mainItems: Array<{
   { key: "categories", href: "/categories", label: "Categorias", icon: <CategoriesIcon /> },
   { key: "locations", href: "/locations", label: "Localizacoes", icon: <LocationsIcon /> },
   { key: "reports", href: "/reports", label: "Relatorios", icon: <ReportsIcon /> },
+  { key: "audit", href: "/audit", label: "Auditoria", icon: <AuditIcon /> },
 ];
 
 const futureItems: Array<{ label: string; icon: ReactNode }> = [];

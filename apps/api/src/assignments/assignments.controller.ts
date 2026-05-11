@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
@@ -13,6 +14,12 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { AssignmentsService } from './assignments.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { ReturnAssignmentDto } from './dto/return-assignment.dto';
+
+type AuthenticatedRequest = {
+  user?: {
+    id?: string;
+  };
+};
 
 @Controller('assignments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -26,8 +33,8 @@ export class AssignmentsController {
 
   @Post()
   @Roles(Role.ADMIN)
-  create(@Body() dto: CreateAssignmentDto) {
-    return this.assignmentsService.create(dto);
+  create(@Body() dto: CreateAssignmentDto, @Req() req: AuthenticatedRequest) {
+    return this.assignmentsService.create(dto, req.user?.id);
   }
 
   @Post(':id/return')
@@ -35,7 +42,8 @@ export class AssignmentsController {
   returnAssignment(
     @Param('id') id: string,
     @Body() dto: ReturnAssignmentDto,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.assignmentsService.returnAssignment(id, dto);
+    return this.assignmentsService.returnAssignment(id, dto, req.user?.id);
   }
 }

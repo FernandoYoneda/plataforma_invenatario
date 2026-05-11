@@ -2,15 +2,20 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 
 @Injectable()
 export class EmployeesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly auditLogs?: AuditLogsService,
+  ) {}
 
   private trimToNull(value?: string | null) {
     if (typeof value !== 'string') return null;
@@ -45,9 +50,9 @@ export class EmployeesService {
     });
   }
 
-  async create(dto: CreateEmployeeDto) {
+  async create(dto: CreateEmployeeDto, userId?: string | null) {
     try {
-      return await this.prisma.employee.create({
+      const employee = await this.prisma.employee.create({
         data: {
           name: dto.name.trim(),
           email: dto.email.trim().toLowerCase(),
@@ -55,6 +60,16 @@ export class EmployeesService {
           position: this.trimToNull(dto.position),
         },
       });
+
+      await this.auditLogs?.create({
+        action: 'EMPLOYEE_CREATED',
+        entityType: 'Employee',
+        entityId: employee.id,
+        description: `Funcionario ${employee.name} criado`,
+        userId,
+      });
+
+      return employee;
     } catch (error) {
       this.handlePrismaError(error);
     }

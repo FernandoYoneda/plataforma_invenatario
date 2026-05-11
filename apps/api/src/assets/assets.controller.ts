@@ -7,14 +7,21 @@ import {
   Query,
   Patch,
   Delete,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { UseGuards } from '@nestjs/common';
 import { AssignmentsService } from '../assignments/assignments.service';
 import { AssetsService } from './assets.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { FindAssetsQueryDto } from './dto/find-assets-query.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
+
+type AuthenticatedRequest = {
+  user?: {
+    id?: string;
+  };
+};
 
 @Controller('assets')
 @UseGuards(JwtAuthGuard)
@@ -25,8 +32,8 @@ export class AssetsController {
   ) {}
 
   @Post()
-  create(@Body() dto: CreateAssetDto) {
-    return this.assetsService.create(dto);
+  create(@Body() dto: CreateAssetDto, @Req() req: AuthenticatedRequest) {
+    return this.assetsService.create(dto, req.user?.id);
   }
 
   @Get()
@@ -45,8 +52,12 @@ export class AssetsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateAssetDto) {
-    return this.assetsService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateAssetDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.assetsService.update(id, dto, req.user?.id);
   }
   @Delete(':id')
   remove(@Param('id') id: string) {

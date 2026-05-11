@@ -79,6 +79,17 @@ export type CreateAssetInput = {
   locationId?: string;
 };
 
+export type UpdateAssetInput = {
+  type?: AssetType;
+  brand?: string;
+  model?: string | null;
+  serialNumber?: string | null;
+  status?: AssetStatus;
+  notes?: string | null;
+  categoryId?: string | null;
+  locationId?: string | null;
+};
+
 export type CreateEmployeeInput = {
   name: string;
   email: string;
@@ -104,4 +115,20 @@ export type CreateAssignmentInput = {
 
 export type ReturnAssignmentInput = {
   notes?: string | null;
+};
+
+export type AuditLog = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  description: string;
+  userId?: string | null;
+  createdAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  } | null;
 };
