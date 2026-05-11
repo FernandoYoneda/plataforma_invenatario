@@ -10,7 +10,8 @@ export type NavKey =
   | "assets"
   | "employees"
   | "categories"
-  | "locations";
+  | "locations"
+  | "reports";
 
 function DashboardIcon() {
   return (
@@ -86,11 +87,10 @@ const mainItems: Array<{
   { key: "employees", href: "/employees", label: "Funcionarios", icon: <EmployeesIcon /> },
   { key: "categories", href: "/categories", label: "Categorias", icon: <CategoriesIcon /> },
   { key: "locations", href: "/locations", label: "Localizacoes", icon: <LocationsIcon /> },
+  { key: "reports", href: "/reports", label: "Relatorios", icon: <ReportsIcon /> },
 ];
 
-const futureItems = [
-  { label: "Relatorios", icon: <ReportsIcon /> },
-];
+const futureItems: Array<{ label: string; icon: ReactNode }> = [];
 
 export default function AppNavigation({ current }: { current: NavKey }) {
   const itemClass = (key: NavKey) =>
@@ -123,19 +123,21 @@ export default function AppNavigation({ current }: { current: NavKey }) {
           ))}
         </nav>
 
-        <div className="mt-8">
-          <div className="px-3 text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-white/36">
-            Em breve
+        {futureItems.length > 0 ? (
+          <div className="mt-8">
+            <div className="px-3 text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-white/36">
+              Em breve
+            </div>
+            <div className="mt-3 space-y-2">
+              {futureItems.map((item) => (
+                <div key={item.label} className="app-nav-item app-nav-item-muted">
+                  <span className="app-nav-icon">{item.icon}</span>
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="mt-3 space-y-2">
-            {futureItems.map((item) => (
-              <div key={item.label} className="app-nav-item app-nav-item-muted">
-                <span className="app-nav-icon">{item.icon}</span>
-                <span>{item.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        ) : null}
 
         <div className="mt-auto pt-6">
           <LogoutButton />
