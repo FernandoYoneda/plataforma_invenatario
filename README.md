@@ -8,6 +8,8 @@ MVP para controle interno de ativos de TI, com cadastro de ativos, funcionarios,
 - `apps/web`: frontend Next.js.
 - `docker-compose.yml`: banco PostgreSQL e pgAdmin para uso local/interno.
 
+O frontend usa a biblioteca `qrcode` para gerar QR Codes dos ativos diretamente no navegador.
+
 ## Variaveis de ambiente
 
 Os arquivos reais de ambiente nao devem ser versionados. Use os exemplos como base:

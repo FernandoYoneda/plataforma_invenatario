@@ -22,6 +22,7 @@ import ActiveAssignmentsPanel from "./ActiveAssignmentsPanel";
 import AppShell from "./AppShell";
 import AssignAssetModal from "./AssignAssetModal";
 import AssetHistoryModal from "./AssetHistoryModal";
+import AssetQrCodeModal from "./AssetQrCodeModal";
 import EditAssetModal from "./EditAssetModal";
 import NewAssetModal from "./NewAssetModal";
 
@@ -588,6 +589,7 @@ export default function AssetsList() {
                                 asset={asset}
                                 refreshKey={historyRefreshKey}
                               />
+                              <AssetQrCodeModal asset={asset} />
                             </div>
                           </td>
                         </tr>
