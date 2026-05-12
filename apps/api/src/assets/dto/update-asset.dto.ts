@@ -40,4 +40,14 @@ export class UpdateAssetDto {
   @Transform(({ value }) => trimString(value))
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  categoryId?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  locationId?: string | null;
 }
