@@ -31,6 +31,12 @@ Usado pelo Docker Compose:
 - `PGADMIN_DEFAULT_EMAIL`
 - `PGADMIN_DEFAULT_PASSWORD`
 - `PGADMIN_PORT`
+- `API_PORT`
+- `API_INTERNAL_PORT`
+- `DATABASE_URL`
+- `WEB_PORT`
+- `WEB_INTERNAL_PORT`
+- `NEXT_PUBLIC_API_URL`
 
 ### API `apps/api/.env`
 
@@ -39,12 +45,16 @@ Usado pelo backend, Prisma e seed:
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `JWT_EXPIRES_IN`
+- `CORS_ORIGIN`
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
 - `ADMIN_NAME`
 - `PORT`
 
 Mantenha a senha do `DATABASE_URL` alinhada com `POSTGRES_PASSWORD`.
+No `.env` da raiz usado pelo Docker, `DATABASE_URL` deve apontar para `db:5432`.
+Use `CORS_ORIGIN` com origens separadas por virgula, por exemplo `http://localhost:3001,http://localhost:3000`.
+No `apps/api/.env` usado fora do Docker, `DATABASE_URL` normalmente aponta para `localhost:5434`.
 
 ### Web `apps/web/.env.local`
 
@@ -63,6 +73,50 @@ docker compose up -d
 Em instalacoes antigas do Docker, use `docker-compose up -d`.
 
 O PostgreSQL usa as variaveis do arquivo `.env` da raiz. O pgAdmin fica disponivel na porta configurada em `PGADMIN_PORT`.
+
+## Rodar tudo via Docker
+
+Na raiz do projeto, configure o `.env` a partir de `.env.example` e troque senhas/segredos.
+
+Construa as imagens:
+
+```powershell
+docker compose build
+```
+
+Suba banco e pgAdmin:
+
+```powershell
+docker compose up -d db pgadmin
+```
+
+Rode migrations sem apagar dados:
+
+```powershell
+docker compose run --rm api npx prisma migrate deploy
+```
+
+Rode o seed inicial:
+
+```powershell
+docker compose run --rm api npx prisma db seed
+```
+
+Suba API e Web:
+
+```powershell
+docker compose up -d api web
+```
+
+Em instalacoes antigas do Docker, substitua `docker compose` por `docker-compose`.
+
+### Acessos Docker
+
+- Web: `http://localhost:3001`, ou porta definida em `WEB_PORT`.
+- API: `http://localhost:3000`, ou porta definida em `API_PORT`.
+- pgAdmin: `http://localhost:5050`, ou porta definida em `PGADMIN_PORT`.
+- PostgreSQL no host: `localhost:5434`, ou porta definida em `POSTGRES_PORT`.
+- PostgreSQL dentro da rede Docker: host `db`, porta `5432`.
 
 ## Rodar migrations
 
