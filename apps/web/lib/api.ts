@@ -113,6 +113,13 @@ export async function getAssets(token?: string | null) {
   });
 }
 
+export async function getAsset(assetId: string, token?: string | null) {
+  return request<Asset>(`/assets/${assetId}`, {
+    method: "GET",
+    token,
+  });
+}
+
 export async function getEmployees(token?: string | null) {
   return request<Employee[]>("/employees", {
     method: "GET",

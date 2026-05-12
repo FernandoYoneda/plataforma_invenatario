@@ -48,6 +48,8 @@ export type Asset = {
   valueCents?: number | null;
   status: AssetStatus;
   registeredAt: string;
+  createdAt?: string;
+  updatedAt?: string;
   notes?: string | null;
   categoryId?: string | null;
   locationId?: string | null;

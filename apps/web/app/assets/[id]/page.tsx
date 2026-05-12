@@ -1,184 +1,341 @@
+"use client";
+
 import Link from "next/link";
-import EditAssetModal from "../../../components/EditAssetModal";
-import DeleteAssetButton from "../../../components/DeleteAssetButton";
-import type { Asset } from "@/lib/types";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { ApiError, getAsset, getAssetHistory } from "@/lib/api";
+import { clearAuthToken, getAuthToken } from "@/lib/auth";
+import type { Asset, Assignment } from "@/lib/types";
+import AppShell from "../../../components/AppShell";
+import AssetQrCodeModal, {
+  assetQrTitle,
+  printAssetQrLabel,
+} from "../../../components/AssetQrCodeModal";
 
-export const dynamic = "force-dynamic";
+const TYPE_LABELS: Record<Asset["type"], string> = {
+  DESKTOP: "Desktop",
+  NOTEBOOK: "Notebook",
+  MONITOR: "Monitor",
+  MOUSE: "Mouse",
+  TECLADO: "Teclado",
+  OUTRO: "Outro",
+};
 
-function moneyBRL(valueCents?: number | null) {
-  if (valueCents == null) return "-";
-  return (valueCents / 100).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
+const STATUS_LABELS: Record<Asset["status"], string> = {
+  EM_USO: "Em uso",
+  ESTOQUE: "Estoque",
+  MANUTENCAO: "Manutencao",
+  BAIXADO: "Baixado",
+};
+
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("pt-BR");
 }
 
-function statusBadge(status: string) {
-  const base =
-    "inline-flex items-center rounded-full border px-2 py-0.5 text-xs";
-  const map: Record<string, string> = {
-    EM_USO: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
-    ESTOQUE: "border-sky-500/30 bg-sky-500/10 text-sky-200",
-    MANUTENCAO: "border-amber-500/30 bg-amber-500/10 text-amber-200",
-    BAIXADO: "border-rose-500/30 bg-rose-500/10 text-rose-200",
-  };
-  return `${base} ${map[status] ?? "border-white/10 bg-white/5 text-white/80"}`;
+function fieldValue(value?: string | null) {
+  return value && value.trim().length > 0 ? value : "-";
 }
 
-async function fetchAsset(id: string): Promise<Asset> {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002";
-  const res = await fetch(`${base}/assets/${id}`, { cache: "no-store" });
-
-  if (!res.ok) {
-    // tenta ler mensagem do backend (JSON)
-    let msg = `Falha ao buscar ativo (HTTP ${res.status})`;
-    try {
-      const maybe = await res.json();
-      if (maybe?.message) {
-        msg = Array.isArray(maybe.message)
-          ? maybe.message.join(", ")
-          : String(maybe.message);
-      }
-    } catch {
-      // ignora se não for JSON
-    }
-    throw new Error(msg);
-  }
-
-  return res.json();
-}
-
-export default async function AssetDetails({
-  params,
+function DetailItem({
+  label,
+  value,
 }: {
-  params: Promise<{ id: string }>;
+  label: string;
+  value: string;
 }) {
-  const { id } = await params;
+  return (
+    <div className="surface-soft rounded-[22px] px-4 py-4">
+      <div className="text-xs font-semibold uppercase tracking-[0.08em] [color:var(--text-muted)]">
+        {label}
+      </div>
+      <div className="mt-2 break-words text-sm font-semibold [color:var(--text-primary)]">
+        {value}
+      </div>
+    </div>
+  );
+}
 
-  let result: { ok: true } | { ok: false; error: string };
-  let asset: Asset | null = null;
+export default function AssetDetailsPage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const assetId = params.id;
 
-  try {
-    asset = await fetchAsset(id);
-    result = { ok: true };
-  } catch (e: unknown) {
-    const msg =
-      e instanceof Error ? e.message : "Erro desconhecido ao buscar ativo.";
-    result = { ok: false, error: msg };
+  const [asset, setAsset] = useState<Asset | null>(null);
+  const [history, setHistory] = useState<Assignment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
+  const [assetUrl, setAssetUrl] = useState("");
+
+  useEffect(() => {
+    setAssetUrl(new URL(`/assets/${assetId}`, window.location.origin).toString());
+  }, [assetId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadDetail() {
+      const token = getAuthToken();
+
+      if (!token) {
+        clearAuthToken();
+        setRedirecting(true);
+        setLoading(false);
+        router.replace("/login");
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const [assetData, historyData] = await Promise.all([
+          getAsset(assetId, token),
+          getAssetHistory(assetId, token),
+        ]);
+
+        if (!active) return;
+        setAsset(assetData);
+        setHistory(historyData);
+      } catch (err: unknown) {
+        if (!active) return;
+
+        if (err instanceof ApiError && err.status === 401) {
+          clearAuthToken();
+          setRedirecting(true);
+          router.replace("/login");
+          return;
+        }
+
+        if (err instanceof ApiError && err.status === 404) {
+          setError("Ativo nao encontrado.");
+          setAsset(null);
+          setHistory([]);
+          return;
+        }
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Nao foi possivel carregar este ativo.",
+        );
+        setAsset(null);
+        setHistory([]);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadDetail();
+
+    return () => {
+      active = false;
+    };
+  }, [assetId, router]);
+
+  const title = useMemo(() => (asset ? assetQrTitle(asset) : ""), [asset]);
+
+  async function handlePrintQr() {
+    if (!asset || !assetUrl) return;
+
+    setPrinting(true);
+    setPrintError(null);
+
+    try {
+      await printAssetQrLabel(asset, assetUrl);
+    } catch (err: unknown) {
+      setPrintError(
+        err instanceof Error
+          ? err.message
+          : "Nao foi possivel imprimir a etiqueta.",
+      );
+    } finally {
+      setPrinting(false);
+    }
   }
+
+  const actions = (
+    <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+      <Link href="/assets" className="btn-secondary px-4 py-2.5 text-sm">
+        Voltar para Assets
+      </Link>
+
+      {asset ? (
+        <>
+          <button
+            type="button"
+            onClick={handlePrintQr}
+            disabled={printing}
+            className="btn-primary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {printing ? "Preparando..." : "Imprimir etiqueta QR"}
+          </button>
+
+          <AssetQrCodeModal asset={asset} />
+        </>
+      ) : null}
+    </div>
+  );
 
   return (
-    <main className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg)]/80 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3">
-          <Link
-            href="/"
-            className="rounded-xl border border-[var(--border)] bg-white/10 px-3 py-2 text-sm hover:bg-white/15"
-          >
-            ← Voltar
-          </Link>
+    <AppShell
+      current="assets"
+      title={asset ? asset.internalCode : "Detalhe do Asset"}
+      subtitle={
+        asset
+          ? title || "Consulta detalhada do ativo"
+          : "Consulta detalhada do ativo e historico de movimentacoes."
+      }
+      actions={actions}
+    >
+      {redirecting ? (
+        <section className="glass-panel rounded-[30px] px-6 py-8 text-sm [color:var(--text-secondary)]">
+          Redirecionando para o login...
+        </section>
+      ) : loading ? (
+        <section className="glass-panel rounded-[30px] px-6 py-8 text-sm [color:var(--text-secondary)]">
+          Carregando asset...
+        </section>
+      ) : error ? (
+        <section className="glass-panel rounded-[30px] px-6 py-8">
+          <div className="status-banner-error rounded-[22px] px-4 py-4 text-sm">
+            <div className="font-semibold">Nao foi possivel carregar o ativo</div>
+            <div className="mt-1">{error}</div>
+          </div>
+        </section>
+      ) : asset ? (
+        <>
+          {printError ? (
+            <div className="status-banner-error rounded-[22px] px-4 py-3 text-sm">
+              {printError}
+            </div>
+          ) : null}
 
-          {result.ok && asset && (
-            <>
-              {/* ✅ agora tipa certo, sem any */}
-              <EditAssetModal asset={asset} />
+          <section className="glass-panel overflow-hidden rounded-[30px]">
+            <div className="border-b px-6 py-5 [border-color:var(--border-soft)]">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="eyebrow">Asset</p>
+                  <h2 className="mt-3 text-2xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
+                    {asset.internalCode}
+                  </h2>
+                  <p className="mt-2 text-sm [color:var(--text-secondary)]">
+                    {title || "-"}
+                  </p>
+                </div>
 
-              <DeleteAssetButton
-                id={asset.id}
-                internalCode={asset.internalCode}
+                <div className="status-pill">{STATUS_LABELS[asset.status]}</div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 px-6 py-6 sm:grid-cols-2 xl:grid-cols-3">
+              <DetailItem label="Codigo interno" value={asset.internalCode} />
+              <DetailItem label="Tipo" value={TYPE_LABELS[asset.type]} />
+              <DetailItem label="Marca" value={asset.brand} />
+              <DetailItem label="Modelo" value={fieldValue(asset.model)} />
+              <DetailItem label="Serial" value={fieldValue(asset.serialNumber)} />
+              <DetailItem label="Status" value={STATUS_LABELS[asset.status]} />
+              <DetailItem
+                label="Categoria"
+                value={fieldValue(asset.category?.name)}
               />
+              <DetailItem
+                label="Localizacao"
+                value={fieldValue(asset.location?.name)}
+              />
+              <DetailItem
+                label="Criado em"
+                value={formatDate(asset.createdAt ?? asset.registeredAt)}
+              />
+              <DetailItem
+                label="Atualizado em"
+                value={formatDate(asset.updatedAt)}
+              />
+            </div>
 
-              <div className="ml-auto text-sm text-[var(--muted)]">
-                {asset.internalCode}
+            <div className="border-t px-6 py-5 [border-color:var(--border-soft)]">
+              <div className="text-xs font-semibold uppercase tracking-[0.08em] [color:var(--text-muted)]">
+                Observacoes
               </div>
-            </>
-          )}
-        </div>
-      </header>
-
-      <section className="mx-auto max-w-4xl px-4 py-6">
-        {!result.ok && (
-          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm">
-            <div className="font-semibold text-rose-200">
-              Não foi possível carregar o ativo
+              <p className="mt-2 whitespace-pre-wrap text-sm [color:var(--text-secondary)]">
+                {fieldValue(asset.notes)}
+              </p>
             </div>
-            <div className="mt-1 text-rose-200/80">{result.error}</div>
+          </section>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link
-                href="/"
-                className="rounded-xl border border-rose-500/30 bg-rose-500/15 px-3 py-2 text-sm text-rose-100 hover:bg-rose-500/20"
-              >
-                Voltar para lista
-              </Link>
-
-              <a
-                href={
-                  (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002") +
-                  `/assets/${id}`
-                }
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-xl border border-[var(--border)] bg-white/10 px-3 py-2 text-sm hover:bg-white/15"
-              >
-                Abrir API (/assets/{id})
-              </a>
-            </div>
-          </div>
-        )}
-
-        {result.ok && asset && (
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h1 className="text-lg font-semibold">
-                  {asset.brand} {asset.model ?? ""}
-                </h1>
-                <p className="text-sm text-[var(--muted)]">
-                  Tipo: <span className="text-white/90">{asset.type}</span>
-                </p>
-              </div>
-
-              <span className={statusBadge(asset.status)}>{asset.status}</span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
-                <div className="text-xs text-[var(--muted)]">
-                  Código interno
+          <section className="glass-panel overflow-hidden rounded-[30px]">
+            <div className="border-b px-6 py-5 [border-color:var(--border-soft)]">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="eyebrow">Historico</p>
+                  <h2 className="mt-2 text-xl font-semibold [color:var(--text-primary)]">
+                    Atribuicoes
+                  </h2>
                 </div>
-                <div className="mt-1 font-medium">{asset.internalCode}</div>
-              </div>
-
-              <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
-                <div className="text-xs text-[var(--muted)]">Valor</div>
-                <div className="mt-1 font-medium">
-                  {moneyBRL(asset.valueCents)}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
-                <div className="text-xs text-[var(--muted)]">Serial</div>
-                <div className="mt-1 font-medium">
-                  {asset.serialNumber ?? "-"}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-[var(--border)] bg-white/5 p-3">
-                <div className="text-xs text-[var(--muted)]">Registrado em</div>
-                <div className="mt-1 font-medium">
-                  {new Date(asset.registeredAt).toLocaleString("pt-BR")}
-                </div>
+                <div className="status-pill">{history.length} registro(s)</div>
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-[var(--border)] bg-white/5 p-3">
-              <div className="text-xs text-[var(--muted)]">Observações</div>
-              <div className="mt-1 text-sm">{asset.notes ?? "-"}</div>
+            <div className="px-6 py-6">
+              {history.length === 0 ? (
+                <div className="surface-soft rounded-[24px] px-4 py-4 text-sm [color:var(--text-secondary)]">
+                  Este asset ainda nao possui atribuicoes registradas.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {history.map((assignment) => (
+                    <div
+                      key={assignment.id}
+                      className="surface-soft rounded-[24px] px-4 py-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="font-semibold [color:var(--text-primary)]">
+                            {assignment.employee?.name ?? assignment.employeeId}
+                          </div>
+                          <div className="mt-1 text-sm [color:var(--text-secondary)]">
+                            {assignment.employee?.email ?? "Sem email"}
+                          </div>
+                        </div>
+                        <div className="status-pill">
+                          {assignment.returnedAt ? "Devolvido" : "Ativo"}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 text-sm [color:var(--text-secondary)] sm:grid-cols-2">
+                        <div>
+                          <span className="font-semibold [color:var(--text-primary)]">
+                            Atribuido em:
+                          </span>{" "}
+                          {formatDate(assignment.assignedAt)}
+                        </div>
+                        <div>
+                          <span className="font-semibold [color:var(--text-primary)]">
+                            Devolvido em:
+                          </span>{" "}
+                          {formatDate(assignment.returnedAt)}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 text-sm [color:var(--text-secondary)]">
+                        <span className="font-semibold [color:var(--text-primary)]">
+                          Observacoes:
+                        </span>{" "}
+                        {fieldValue(assignment.notes)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        )}
-      </section>
-    </main>
+          </section>
+        </>
+      ) : null}
+    </AppShell>
   );
 }

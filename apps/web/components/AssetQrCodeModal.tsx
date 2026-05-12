@@ -18,7 +18,7 @@ function QrIcon() {
   );
 }
 
-function assetTitle(asset: Asset) {
+export function assetQrTitle(asset: Asset) {
   return [asset.brand, asset.model].filter(Boolean).join(" ");
 }
 
@@ -31,78 +31,33 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
-export default function AssetQrCodeModal({ asset }: { asset: Asset }) {
-  const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [assetUrl, setAssetUrl] = useState("");
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export function createAssetQrDataUrl(assetUrl: string) {
+  return QRCode.toDataURL(assetUrl, {
+    errorCorrectionLevel: "M",
+    margin: 2,
+    width: 280,
+    color: {
+      dark: "#173a43",
+      light: "#ffffff",
+    },
+  });
+}
 
-  const title = useMemo(() => assetTitle(asset), [asset]);
+export async function printAssetQrLabel(
+  asset: Asset,
+  assetUrl: string,
+  existingQrDataUrl?: string | null,
+) {
+  const printWindow = window.open("", "_blank", "width=480,height=640");
 
-  useEffect(() => setMounted(true), []);
+  if (!printWindow) {
+    throw new Error("Nao foi possivel abrir a janela de impressao.");
+  }
 
-  useEffect(() => {
-    if (!mounted) return;
-
-    setAssetUrl(new URL(`/assets/${asset.id}`, window.location.origin).toString());
-  }, [asset.id, mounted]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousOverflow || "";
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || !assetUrl) return;
-
-    let active = true;
-    setQrDataUrl(null);
-    setError(null);
-
-    QRCode.toDataURL(assetUrl, {
-      errorCorrectionLevel: "M",
-      margin: 2,
-      width: 280,
-      color: {
-        dark: "#173a43",
-        light: "#ffffff",
-      },
-    })
-      .then((value) => {
-        if (active) {
-          setQrDataUrl(value);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setError("Nao foi possivel gerar o QR Code deste asset.");
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [assetUrl, open]);
-
-  function handlePrint() {
-    if (!qrDataUrl) return;
-
-    const printWindow = window.open("", "_blank", "width=480,height=640");
-
-    if (!printWindow) {
-      window.print();
-      return;
-    }
-
+  try {
+    const qrDataUrl = existingQrDataUrl ?? (await createAssetQrDataUrl(assetUrl));
     const safeCode = escapeHtml(asset.internalCode);
-    const safeTitle = escapeHtml(title || "-");
+    const safeTitle = escapeHtml(assetQrTitle(asset) || "-");
     const safeUrl = escapeHtml(assetUrl);
 
     printWindow.document.write(`
@@ -160,6 +115,72 @@ export default function AssetQrCodeModal({ asset }: { asset: Asset }) {
     printWindow.document.close();
     printWindow.focus();
     window.setTimeout(() => printWindow.print(), 150);
+  } catch (error) {
+    printWindow.close();
+    throw error;
+  }
+}
+
+export default function AssetQrCodeModal({ asset }: { asset: Asset }) {
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [assetUrl, setAssetUrl] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const title = useMemo(() => assetQrTitle(asset), [asset]);
+
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
+    setAssetUrl(new URL(`/assets/${asset.id}`, window.location.origin).toString());
+  }, [asset.id, mounted]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow || "";
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !assetUrl) return;
+
+    let active = true;
+    setQrDataUrl(null);
+    setError(null);
+
+    createAssetQrDataUrl(assetUrl)
+      .then((value) => {
+        if (active) {
+          setQrDataUrl(value);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setError("Nao foi possivel gerar o QR Code deste asset.");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [assetUrl, open]);
+
+  async function handlePrint() {
+    if (!qrDataUrl) return;
+
+    try {
+      await printAssetQrLabel(asset, assetUrl, qrDataUrl);
+    } catch {
+      setError("Nao foi possivel abrir a impressao da etiqueta.");
+    }
   }
 
   const modal = (
