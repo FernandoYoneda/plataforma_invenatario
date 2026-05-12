@@ -1,7 +1,9 @@
 import type {
   AuditLog,
   Asset,
+  AssetAttachment,
   Assignment,
+  AuthUser,
   Category,
   CreateAssignmentInput,
   CreateAssetInput,
@@ -79,6 +81,29 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return res.json() as Promise<T>;
 }
 
+async function requestBlob(
+  path: string,
+  token?: string | null,
+): Promise<Blob> {
+  const headers = new Headers();
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "GET",
+    headers,
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new ApiError(await parseErrorMessage(res), res.status);
+  }
+
+  return res.blob();
+}
+
 export async function login(payload: {
   email: string;
   password: string;
@@ -104,6 +129,13 @@ export async function login(payload: {
   }
 
   return { accessToken };
+}
+
+export async function getCurrentUser(token?: string | null) {
+  return request<AuthUser>("/auth/me", {
+    method: "GET",
+    token,
+  });
 }
 
 export async function getAssets(token?: string | null) {
@@ -232,6 +264,69 @@ export async function getAssetHistory(assetId: string, token?: string | null) {
     method: "GET",
     token,
   });
+}
+
+export async function getAssetAttachments(
+  assetId: string,
+  token?: string | null,
+) {
+  return request<AssetAttachment[]>(`/assets/${assetId}/attachments`, {
+    method: "GET",
+    token,
+  });
+}
+
+export async function uploadAssetAttachment(
+  assetId: string,
+  file: File,
+  token?: string | null,
+) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const headers = new Headers();
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const res = await fetch(`${API_BASE_URL}/assets/${assetId}/attachments`, {
+    method: "POST",
+    headers,
+    body: formData,
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new ApiError(await parseErrorMessage(res), res.status);
+  }
+
+  return res.json() as Promise<AssetAttachment>;
+}
+
+export async function deleteAssetAttachment(
+  assetId: string,
+  attachmentId: string,
+  token?: string | null,
+) {
+  return request<{ ok: boolean }>(
+    `/assets/${assetId}/attachments/${attachmentId}`,
+    {
+      method: "DELETE",
+      token,
+    },
+  );
+}
+
+export async function downloadAssetAttachment(
+  assetId: string,
+  attachmentId: string,
+  token?: string | null,
+) {
+  return requestBlob(
+    `/assets/${assetId}/attachments/${attachmentId}/download`,
+    token,
+  );
 }
 
 export async function getAuditLogs(token?: string | null) {

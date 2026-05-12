@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { ApiError, getAsset, getAssetHistory } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ApiError, getAsset, getAssetHistory, getCurrentUser } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import type { Asset, Assignment } from "@/lib/types";
 import AppShell from "../../../components/AppShell";
+import AssetAttachmentsPanel from "../../../components/AssetAttachmentsPanel";
 import AssetQrCodeModal, {
   assetQrTitle,
   printAssetQrLabel,
@@ -69,10 +70,17 @@ export default function AssetDetailsPage() {
   const [printing, setPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
   const [assetUrl, setAssetUrl] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     setAssetUrl(new URL(`/assets/${assetId}`, window.location.origin).toString());
   }, [assetId]);
+
+  const handleUnauthorized = useCallback(() => {
+    clearAuthToken();
+    setRedirecting(true);
+    router.replace("/login");
+  }, [router]);
 
   useEffect(() => {
     let active = true;
@@ -81,10 +89,8 @@ export default function AssetDetailsPage() {
       const token = getAuthToken();
 
       if (!token) {
-        clearAuthToken();
-        setRedirecting(true);
+        handleUnauthorized();
         setLoading(false);
-        router.replace("/login");
         return;
       }
 
@@ -92,21 +98,21 @@ export default function AssetDetailsPage() {
       setError(null);
 
       try {
-        const [assetData, historyData] = await Promise.all([
+        const [assetData, historyData, userData] = await Promise.all([
           getAsset(assetId, token),
           getAssetHistory(assetId, token),
+          getCurrentUser(token),
         ]);
 
         if (!active) return;
         setAsset(assetData);
         setHistory(historyData);
+        setIsAdmin(userData.role === "ADMIN");
       } catch (err: unknown) {
         if (!active) return;
 
         if (err instanceof ApiError && err.status === 401) {
-          clearAuthToken();
-          setRedirecting(true);
-          router.replace("/login");
+          handleUnauthorized();
           return;
         }
 
@@ -136,7 +142,7 @@ export default function AssetDetailsPage() {
     return () => {
       active = false;
     };
-  }, [assetId, router]);
+  }, [assetId, handleUnauthorized]);
 
   const title = useMemo(() => (asset ? assetQrTitle(asset) : ""), [asset]);
 
@@ -267,6 +273,12 @@ export default function AssetDetailsPage() {
               </p>
             </div>
           </section>
+
+          <AssetAttachmentsPanel
+            assetId={asset.id}
+            isAdmin={isAdmin}
+            onUnauthorized={handleUnauthorized}
+          />
 
           <section className="glass-panel overflow-hidden rounded-[30px]">
             <div className="border-b px-6 py-5 [border-color:var(--border-soft)]">

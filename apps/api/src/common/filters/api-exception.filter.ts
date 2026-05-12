@@ -51,6 +51,16 @@ export class ApiExceptionFilter implements ExceptionFilter {
       return this.resolvePrismaKnownError(exception);
     }
 
+    if (this.isMulterError(exception)) {
+      return {
+        statusCode: HttpStatus.BAD_REQUEST,
+        message:
+          exception.code === 'LIMIT_FILE_SIZE'
+            ? 'Arquivo excede o limite permitido'
+            : 'Arquivo enviado invalido',
+      };
+    }
+
     return {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Erro interno do servidor',
@@ -94,5 +104,16 @@ export class ApiExceptionFilter implements ExceptionFilter {
           message: 'Erro ao processar dados no banco',
         };
     }
+  }
+
+  private isMulterError(
+    exception: unknown,
+  ): exception is { name: string; code?: string } {
+    return (
+      typeof exception === 'object' &&
+      exception !== null &&
+      'name' in exception &&
+      (exception as { name?: unknown }).name === 'MulterError'
+    );
   }
 }

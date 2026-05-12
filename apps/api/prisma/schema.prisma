@@ -98,9 +98,26 @@ model Asset {
   category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   location    Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
   assignments Assignment[]
+  attachments AssetAttachment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model AssetAttachment {
+  id           String   @id @default(uuid())
+  assetId      String
+  fileName     String
+  originalName String
+  mimeType     String
+  size         Int
+  filePath     String
+  createdAt    DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([createdAt])
 }
 
 model Assignment {

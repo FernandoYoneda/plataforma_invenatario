@@ -9,6 +9,7 @@ MVP para controle interno de ativos de TI, com cadastro de ativos, funcionarios,
 - `docker-compose.yml`: banco PostgreSQL e pgAdmin para uso local/interno.
 
 O frontend usa a biblioteca `qrcode` para gerar QR Codes dos ativos diretamente no navegador.
+Anexos de ativos sao salvos localmente em `uploads/assets`.
 
 ## Variaveis de ambiente
 
@@ -119,6 +120,15 @@ Em instalacoes antigas do Docker, substitua `docker compose` por `docker-compose
 - pgAdmin: `http://localhost:5050`, ou porta definida em `PGADMIN_PORT`.
 - PostgreSQL no host: `localhost:5434`, ou porta definida em `POSTGRES_PORT`.
 - PostgreSQL dentro da rede Docker: host `db`, porta `5432`.
+- Uploads da API: volume Docker `uploads_data`, montado em `/app/uploads`.
+
+## Uploads de anexos
+
+Os anexos enviados pela tela de detalhe do asset ficam em `uploads/assets` quando a API roda localmente. Essa pasta e ignorada pelo Git.
+
+No Docker Compose, os uploads ficam no volume `uploads_data`, montado no container da API em `/app/uploads`. Preserve esse volume em backups ou migracoes de ambiente, junto com o backup do PostgreSQL.
+
+Rotas de upload e exclusao sao restritas a usuarios `ADMIN`. Consulta e download exigem usuario autenticado.
 
 ## Backup e restore do banco
 

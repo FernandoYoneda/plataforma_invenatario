@@ -57,6 +57,17 @@ export type Asset = {
   location?: Location | null;
 };
 
+export type AssetAttachment = {
+  id: string;
+  assetId: string;
+  fileName: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  filePath: string;
+  createdAt: string;
+};
+
 export type Assignment = {
   id: string;
   assetId: string;
@@ -133,4 +144,13 @@ export type AuditLog = {
     email: string;
     role: string;
   } | null;
+};
+
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: "ADMIN" | "OPERADOR" | "CONSULTA";
+  createdAt?: string;
+  updatedAt?: string;
 };
