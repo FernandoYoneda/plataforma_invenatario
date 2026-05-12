@@ -118,6 +118,36 @@ Em instalacoes antigas do Docker, substitua `docker compose` por `docker-compose
 - PostgreSQL no host: `localhost:5434`, ou porta definida em `POSTGRES_PORT`.
 - PostgreSQL dentro da rede Docker: host `db`, porta `5432`.
 
+## Backup e restore do banco
+
+Os scripts usam o container Postgres `inventario_db` e leem `POSTGRES_USER` e `POSTGRES_DB` do `.env` da raiz. Os arquivos de backup sao salvos em `backups/`, pasta ignorada pelo Git.
+
+Gerar backup:
+
+```powershell
+.\scripts\backup-db.ps1
+```
+
+O arquivo gerado usa data e hora no nome, por exemplo `backups/inventario_ti-20260512-143000.dump`.
+
+Validar um restore sem alterar dados:
+
+```powershell
+.\scripts\restore-db.ps1 -BackupFile .\backups\inventario_ti-20260512-143000.dump -DryRun
+```
+
+Restaurar backup:
+
+```powershell
+.\scripts\restore-db.ps1 -BackupFile .\backups\inventario_ti-20260512-143000.dump -Force
+```
+
+Atencao: restore pode sobrescrever dados do banco atual. Antes de restaurar, gere um backup novo e pare API/Web se quiser evitar escritas durante a operacao:
+
+```powershell
+docker-compose stop api web
+```
+
 ## Rodar migrations
 
 ```powershell
