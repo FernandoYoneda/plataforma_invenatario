@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -44,9 +45,38 @@ export class EmployeesService {
     throw error;
   }
 
-  findAll() {
+  findAll(status?: string) {
+    const where =
+      status === 'all'
+        ? {}
+        : status === 'inactive'
+          ? { isActive: false }
+          : { isActive: true };
+
     return this.prisma.employee.findMany({
-      orderBy: { name: 'asc' },
+      where,
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+    });
+  }
+
+  async findAssignments(id: string) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id },
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Funcionario nao encontrado');
+    }
+
+    return this.prisma.assignment.findMany({
+      where: { employeeId: id },
+      include: {
+        asset: true,
+        employee: true,
+      },
+      orderBy: {
+        assignedAt: 'desc',
+      },
     });
   }
 
@@ -58,6 +88,7 @@ export class EmployeesService {
           email: dto.email.trim().toLowerCase(),
           department: this.trimToNull(dto.department),
           position: this.trimToNull(dto.position),
+          isActive: true,
         },
       });
 
@@ -100,12 +131,42 @@ export class EmployeesService {
     }
   }
 
-  async remove(id: string) {
+  async inactivate(id: string, userId?: string | null) {
     const exists = await this.prisma.employee.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Funcionario nao encontrado');
 
+    const activeAssignment = await this.prisma.assignment.findFirst({
+      where: {
+        employeeId: id,
+        returnedAt: null,
+      },
+    });
+
+    if (activeAssignment) {
+      throw new BadRequestException(
+        'Funcionário possui ativos atribuídos. Devolva os ativos antes de inativar.',
+      );
+    }
+
+    if (!exists.isActive) {
+      return exists;
+    }
+
     try {
-      return await this.prisma.employee.delete({ where: { id } });
+      const employee = await this.prisma.employee.update({
+        where: { id },
+        data: { isActive: false },
+      });
+
+      await this.auditLogs?.create({
+        action: 'EMPLOYEE_INACTIVATED',
+        entityType: 'Employee',
+        entityId: employee.id,
+        description: `Funcionario ${employee.name} inativado`,
+        userId,
+      });
+
+      return employee;
     } catch (error) {
       this.handlePrismaError(error);
     }

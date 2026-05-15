@@ -44,11 +44,11 @@ export default function LoginForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="glass-panel w-full max-w-md rounded-[32px] p-8"
+      className="glass-panel login-form-card"
     >
-      <div className="mb-8">
+      <div className="mb-6">
         <p className="eyebrow">Inventario TI</p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.03em] [color:var(--text-primary)]">
+        <h1 className="mt-3 text-2xl font-semibold tracking-[0] [color:var(--text-primary)]">
           Entrar
         </h1>
         <p className="mt-2 text-sm [color:var(--text-secondary)]">

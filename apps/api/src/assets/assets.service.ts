@@ -38,6 +38,14 @@ export class AssetsService {
     return trimmed.length > 0 ? trimmed : undefined;
   }
 
+  private trimToNullishId(value?: string | null) {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
   private ensureValueForTypedAsset(type: AssetType, valueCents?: number | null) {
     if (this.typedAssets.has(type) && valueCents == null) {
       throw new BadRequestException(
@@ -78,6 +86,8 @@ export class AssetsService {
         valueCents: dto.valueCents,
         status: dto.status,
         notes: this.trimToNull(dto.notes),
+        categoryId: this.trimToNullishId(dto.categoryId),
+        locationId: this.trimToNullishId(dto.locationId),
       },
     });
 
@@ -183,6 +193,12 @@ export class AssetsService {
         }),
         ...(dto.notes !== undefined && {
           notes: this.trimToNull(dto.notes),
+        }),
+        ...(dto.categoryId !== undefined && {
+          categoryId: this.trimToNullishId(dto.categoryId),
+        }),
+        ...(dto.locationId !== undefined && {
+          locationId: this.trimToNullishId(dto.locationId),
         }),
       },
       include: {

@@ -61,7 +61,7 @@ export class AssignmentsService {
       action: 'ASSIGNMENT_CREATED',
       entityType: 'Assignment',
       entityId: assignment.id,
-      description: `Asset ${assignment.asset.internalCode} atribuido para ${assignment.employee.name}`,
+      description: `Asset ${assignment.asset.internalCode} atribuido para ${assignment.employee?.name ?? assignment.employeeId ?? 'Funcionario removido'}`,
       userId,
     });
 
@@ -101,7 +101,7 @@ export class AssignmentsService {
       action: 'ASSIGNMENT_RETURNED',
       entityType: 'Assignment',
       entityId: returnedAssignment.id,
-      description: `Asset ${returnedAssignment.asset.internalCode} devolvido por ${returnedAssignment.employee.name}`,
+      description: `Asset ${returnedAssignment.asset.internalCode} devolvido por ${returnedAssignment.employee?.name ?? returnedAssignment.employeeId ?? 'Funcionario removido'}`,
       userId,
     });
 

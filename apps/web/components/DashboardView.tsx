@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getActiveAssignments, getAssets } from "@/lib/api";
+import { getActiveAssignments, getAssets, getLocations } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
-import type { Assignment, Asset } from "@/lib/types";
+import type { Assignment, Asset, Location } from "@/lib/types";
 import AppShell from "./AppShell";
 
 function formatDate(value?: string | null) {
@@ -16,6 +16,7 @@ export default function DashboardView() {
   const router = useRouter();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
@@ -48,13 +49,15 @@ export default function DashboardView() {
       }
 
       try {
-        const [assetsData, assignmentsData] = await Promise.all([
+        const [assetsData, assignmentsData, locationsData] = await Promise.all([
           getAssets(token),
           getActiveAssignments(token),
+          getLocations(token),
         ]);
 
         setAssets(assetsData);
         setAssignments(assignmentsData);
+        setLocations(locationsData);
         setError(null);
       } catch (err: unknown) {
         const message =
@@ -84,6 +87,38 @@ export default function DashboardView() {
       activeAssignments: assignments.length,
     };
   }, [assets, assignments]);
+
+  const locationBreakdown = useMemo(() => {
+    const byId = new Map(locations.map((location) => [location.id, location]));
+    const counts = new Map<string, number>();
+    let withoutLocation = 0;
+
+    for (const asset of assets) {
+      const locationId = asset.locationId ?? asset.location?.id ?? "";
+
+      if (!locationId) {
+        withoutLocation += 1;
+        continue;
+      }
+
+      counts.set(locationId, (counts.get(locationId) ?? 0) + 1);
+    }
+
+    const items = Array.from(counts.entries())
+      .map(([id, count]) => ({
+        id,
+        name: byId.get(id)?.name ?? "Localização sem nome",
+        count,
+        percent: assets.length > 0 ? Math.round((count / assets.length) * 100) : 0,
+      }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "pt-BR"));
+
+    return {
+      items,
+      withoutLocation,
+      totalLocationAssets: items.reduce((total, item) => total + item.count, 0),
+    };
+  }, [assets, locations]);
 
   const cards = [
     {
@@ -118,6 +153,7 @@ export default function DashboardView() {
       current="dashboard"
       title="Dashboard"
       subtitle="Visao consolidada do inventario, com leitura rapida de ativos, manutencoes e atribuicoes em andamento."
+      contentSize="wide"
     >
           {redirecting ? (
             <section className="surface-card rounded-[30px] px-6 py-10 text-sm [color:var(--text-secondary)]">
@@ -129,7 +165,7 @@ export default function DashboardView() {
             </section>
           ) : (
             <>
-              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              <section className="metrics-grid">
                 {cards.map((card) => (
                   <article
                     key={card.label}
@@ -147,6 +183,75 @@ export default function DashboardView() {
                     </div>
                   </article>
                 ))}
+              </section>
+
+              <section className="overflow-hidden rounded-[30px] border [border-color:var(--border-soft)] bg-[rgba(255,255,255,0.72)] shadow-[0_18px_50px_rgba(23,58,67,0.08)] backdrop-blur">
+                <div className="flex flex-col gap-2 border-b px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold [color:var(--text-primary)]">
+                      Ativos por localização
+                    </h2>
+                    <p className="mt-1 text-sm [color:var(--text-secondary)]">
+                      Clique em uma localização para abrir a lista filtrada.
+                    </p>
+                  </div>
+                  <div className="status-pill">
+                    {loading
+                      ? "Carregando..."
+                      : `${locationBreakdown.items.length} localizaç${locationBreakdown.items.length === 1 ? "ão" : "ões"}`}
+                  </div>
+                </div>
+
+                {loading ? (
+                  <div className="px-6 py-8 text-sm [color:var(--text-secondary)]">
+                    Calculando distribuição por localização...
+                  </div>
+                ) : locationBreakdown.items.length === 0 ? (
+                  <div className="px-6 py-8 text-sm [color:var(--text-secondary)]">
+                    Nenhum asset com localização cadastrada.
+                  </div>
+                ) : (
+                  <div className="grid gap-3 p-6 sm:grid-cols-2 xl:grid-cols-3">
+                    {locationBreakdown.items.map((location) => (
+                      <button
+                        key={location.id}
+                        type="button"
+                          onClick={() =>
+                            router.push(
+                              `/assets?locationId=${encodeURIComponent(location.id)}`,
+                            )
+                        }
+                        className="surface-soft rounded-[24px] p-4 text-left transition hover:-translate-y-0.5 hover:bg-[rgba(255,255,255,0.9)]"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="text-sm font-semibold [color:var(--text-primary)]">
+                              {location.name}
+                            </div>
+                            <div className="mt-1 text-xs [color:var(--text-secondary)]">
+                              {location.count} asset(s)
+                            </div>
+                          </div>
+                          <div className="status-pill">{location.percent}%</div>
+                        </div>
+
+                        <div className="mt-4 h-2 rounded-full bg-[rgba(23,58,67,0.08)]">
+                          <div
+                            className="h-2 rounded-full bg-[linear-gradient(135deg,var(--brand-teal-800),var(--brand-coral-500))]"
+                            style={{ width: `${Math.max(location.percent, 6)}%` }}
+                          />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {locationBreakdown.withoutLocation > 0 ? (
+                  <div className="border-t px-6 py-4 text-sm [border-color:var(--border-soft)] [color:var(--text-secondary)]">
+                    {locationBreakdown.withoutLocation} asset(s) sem localização
+                    vinculada.
+                  </div>
+                ) : null}
               </section>
 
               <section className="overflow-hidden rounded-[30px] border [border-color:var(--border-soft)] bg-[rgba(255,255,255,0.72)] shadow-[0_18px_50px_rgba(23,58,67,0.08)] backdrop-blur">
@@ -196,10 +301,12 @@ export default function DashboardView() {
                             </td>
                             <td>
                               <div className="cell-strong">
-                                {assignment.employee?.name ?? assignment.employeeId}
+                                {assignment.employee?.name ??
+                                  assignment.employeeId ??
+                                  "Funcionario removido"}
                               </div>
                               <div className="mt-1 text-xs [color:var(--text-muted)]">
-                                {assignment.employee?.email ?? "Sem email"}
+                                {assignment.employee?.email ?? "Funcionario removido"}
                               </div>
                             </td>
                             <td>{formatDate(assignment.assignedAt)}</td>

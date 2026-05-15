@@ -159,6 +159,35 @@ export async function getEmployees(token?: string | null) {
   });
 }
 
+export async function getActiveEmployees(token?: string | null) {
+  return request<Employee[]>("/employees?status=active", {
+    method: "GET",
+    token,
+  });
+}
+
+export async function getEmployeesList(
+  token?: string | null,
+  status: "active" | "inactive" | "all" = "active",
+) {
+  const suffix = status === "active" ? "?status=active" : `?status=${status}`;
+
+  return request<Employee[]>(`/employees${suffix}`, {
+    method: "GET",
+    token,
+  });
+}
+
+export async function getEmployeeAssignments(
+  employeeId: string,
+  token?: string | null,
+) {
+  return request<Assignment[]>(`/employees/${employeeId}/assignments`, {
+    method: "GET",
+    token,
+  });
+}
+
 export async function createEmployee(
   payload: CreateEmployeeInput,
   token?: string | null,
@@ -166,6 +195,16 @@ export async function createEmployee(
   return request<Employee>("/employees", {
     method: "POST",
     body: payload,
+    token,
+  });
+}
+
+export async function inactivateEmployee(
+  employeeId: string,
+  token?: string | null,
+) {
+  return request<Employee>(`/employees/${employeeId}/inactivate`, {
+    method: "PATCH",
     token,
   });
 }

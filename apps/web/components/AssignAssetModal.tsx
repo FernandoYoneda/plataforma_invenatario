@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { createAssignment, getEmployees } from "@/lib/api";
+import { createAssignment, getActiveEmployees } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import type { Asset, Assignment, Employee } from "@/lib/types";
 
@@ -66,7 +66,7 @@ export default function AssignAssetModal({
       setEmployeesError(null);
 
       try {
-        const data = await getEmployees(token);
+        const data = await getActiveEmployees(token);
         if (!active) return;
         setEmployees(data);
       } catch (err: unknown) {

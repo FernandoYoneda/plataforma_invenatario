@@ -140,10 +140,12 @@ export default function AssetHistoryModal({
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="font-medium [color:var(--text-primary)]">
-                          {assignment.employee?.name ?? assignment.employeeId}
+                          {assignment.employee?.name ??
+                            assignment.employeeId ??
+                            "Funcionario removido"}
                         </div>
                         <div className="mt-1 text-sm [color:var(--text-secondary)]">
-                          {assignment.employee?.email ?? "Sem email"}
+                          {assignment.employee?.email ?? "Funcionario removido"}
                         </div>
                       </div>
                       <div className="status-pill">

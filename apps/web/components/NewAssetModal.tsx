@@ -323,7 +323,7 @@ export default function NewAssetModal({
 
                 <label className="text-sm">
                   <span className="font-medium [color:var(--text-primary)]">
-                    Localizacao
+                    Localização
                   </span>
                   <select
                     value={locationId}
@@ -334,7 +334,7 @@ export default function NewAssetModal({
                     <option value="">
                       {loadingReferences
                         ? "Carregando locais..."
-                        : "Sem localizacao"}
+                        : "Sem localização"}
                     </option>
                     {locations.map((item) => (
                       <option key={item.id} value={item.id}>

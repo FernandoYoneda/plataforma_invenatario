@@ -109,10 +109,12 @@ export default function ActiveAssignmentsPanel({
                   </td>
                   <td>
                     <div className="cell-strong">
-                      {assignment.employee?.name ?? assignment.employeeId}
+                    {assignment.employee?.name ??
+                      assignment.employeeId ??
+                      "Funcionario removido"}
                     </div>
                     <div className="mt-1 text-xs [color:var(--text-muted)]">
-                      {assignment.employee?.email ?? "Sem email"}
+                    {assignment.employee?.email ?? "Funcionario removido"}
                     </div>
                   </td>
                   <td>{formatDate(assignment.assignedAt)}</td>

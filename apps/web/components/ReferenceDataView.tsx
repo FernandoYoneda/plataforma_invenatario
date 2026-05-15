@@ -119,6 +119,7 @@ export default function ReferenceDataView<TItem extends ReferenceItem>({
       current={current}
       title={title}
       subtitle={subtitle}
+      contentSize="compact"
       actions={
         <NewReferenceModal
           buttonLabel={buttonLabel}

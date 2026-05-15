@@ -71,7 +71,10 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new ApiExceptionFilter());
 
-  await app.listen(Number(configService.get<string>('PORT') ?? 3000));
+  await app.listen(
+    Number(configService.get<string>('PORT') ?? 3000),
+    '0.0.0.0',
+  );
 }
 
 bootstrap();

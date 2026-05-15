@@ -49,7 +49,7 @@ function categoryName(asset: Asset) {
 }
 
 function locationName(asset: Asset) {
-  return asset.location?.name ?? "Sem localizacao";
+  return asset.location?.name ?? "Sem localização";
 }
 
 function incrementGroup(map: Map<string, number>, key: string) {
@@ -337,7 +337,7 @@ export default function ReportsView() {
         "modelo",
         "status",
         "categoria",
-        "localizacao",
+        "localização",
       ],
       ...filteredAssets.map((asset) => [
         asset.internalCode,
@@ -365,6 +365,7 @@ export default function ReportsView() {
       current="reports"
       title="Relatorios"
       subtitle="Indicadores operacionais do inventario e exportacao dos ativos filtrados."
+      contentSize="wide"
       actions={
         <button
           type="button"
@@ -403,7 +404,7 @@ export default function ReportsView() {
               </button>
             </div>
 
-            <div className="grid gap-4 px-6 py-5 lg:grid-cols-[minmax(14rem,1.35fr)_repeat(4,minmax(9rem,1fr))]">
+            <div className="grid gap-4 px-6 py-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(14rem,1.35fr)_repeat(4,minmax(9rem,1fr))]">
               <label className="block text-sm">
                 <span className="font-medium [color:var(--text-primary)]">
                   Buscar
@@ -476,7 +477,7 @@ export default function ReportsView() {
 
               <label className="block text-sm">
                 <span className="font-medium [color:var(--text-primary)]">
-                  Localizacao
+                  Localização
                 </span>
                 <select
                   value={locationFilter}
@@ -495,7 +496,7 @@ export default function ReportsView() {
             </div>
           </section>
 
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="metrics-grid">
             {cards.map((card, index) => (
               <article key={card.label} className="stat-card">
                 <div
@@ -512,7 +513,7 @@ export default function ReportsView() {
             ))}
           </section>
 
-          <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <section className="grid gap-6 2xl:grid-cols-[0.9fr_1.1fr]">
             <article className="surface-card rounded-[30px] p-6">
               <div className="mb-6">
                 <h2 className="text-lg font-semibold [color:var(--text-primary)]">
@@ -550,11 +551,11 @@ export default function ReportsView() {
             </article>
           </section>
 
-          <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <section className="grid gap-6 2xl:grid-cols-[1.1fr_0.9fr]">
             <article className="surface-card rounded-[30px] p-6">
               <div className="mb-6">
                 <h2 className="text-lg font-semibold [color:var(--text-primary)]">
-                  Ativos por localizacao
+                  Ativos por localização
                 </h2>
                 <p className="mt-1 text-sm [color:var(--text-secondary)]">
                   Distribuicao fisica dos ativos filtrados.
@@ -562,7 +563,7 @@ export default function ReportsView() {
               </div>
               {loading ? (
                 <div className="py-8 text-sm [color:var(--text-secondary)]">
-                  Carregando localizacoes...
+                  Carregando localizações...
                 </div>
               ) : (
                 <BarChart items={report.byLocation} />

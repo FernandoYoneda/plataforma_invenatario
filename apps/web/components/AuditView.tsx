@@ -110,6 +110,7 @@ export default function AuditView() {
       current="audit"
       title="Auditoria"
       subtitle="Timeline centralizada das principais acoes executadas no inventario."
+      contentSize="standard"
     >
       <section className="overflow-hidden rounded-[30px] border [border-color:var(--border-soft)] bg-[rgba(255,255,255,0.72)] shadow-[0_18px_50px_rgba(23,58,67,0.08)] backdrop-blur">
         <div className="flex flex-col gap-3 border-b px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-center sm:justify-between">

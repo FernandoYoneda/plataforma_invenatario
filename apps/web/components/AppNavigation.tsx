@@ -98,22 +98,48 @@ const mainItems: Array<{
   { key: "assets", href: "/assets", label: "Assets", icon: <AssetsIcon /> },
   { key: "employees", href: "/employees", label: "Funcionarios", icon: <EmployeesIcon /> },
   { key: "categories", href: "/categories", label: "Categorias", icon: <CategoriesIcon /> },
-  { key: "locations", href: "/locations", label: "Localizacoes", icon: <LocationsIcon /> },
+  { key: "locations", href: "/locations", label: "Localizações", icon: <LocationsIcon /> },
   { key: "reports", href: "/reports", label: "Relatorios", icon: <ReportsIcon /> },
   { key: "audit", href: "/audit", label: "Auditoria", icon: <AuditIcon /> },
 ];
 
 const futureItems: Array<{ label: string; icon: ReactNode }> = [];
 
-export default function AppNavigation({ current }: { current: NavKey }) {
+export default function AppNavigation({
+  current,
+  mobileOpen = false,
+  onClose,
+  onNavigate,
+}: {
+  current: NavKey;
+  mobileOpen?: boolean;
+  onClose?: () => void;
+  onNavigate?: () => void;
+}) {
   const itemClass = (key: NavKey) =>
     key === current
       ? "app-nav-item app-nav-item-active"
       : "app-nav-item";
 
   return (
-    <aside className="app-sidebar">
+    <aside
+      className={`app-sidebar ${mobileOpen ? "app-sidebar-open" : ""}`}
+      aria-label="Navegacao principal"
+    >
       <div className="app-sidebar-inner">
+        <div className="app-sidebar-mobile-top">
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/54">
+            Navegacao
+          </span>
+          <button
+            type="button"
+            className="app-sidebar-close"
+            onClick={onClose}
+          >
+            Fechar
+          </button>
+        </div>
+
         <div className="app-brand">
           <BrandLogo
             variant="horizontal"
@@ -129,7 +155,12 @@ export default function AppNavigation({ current }: { current: NavKey }) {
 
         <nav className="space-y-2">
           {mainItems.map((item) => (
-            <Link key={item.key} href={item.href} className={itemClass(item.key)}>
+            <Link
+              key={item.key}
+              href={item.href}
+              className={itemClass(item.key)}
+              onClick={onNavigate}
+            >
               <span className="app-nav-icon">{item.icon}</span>
               <span>{item.label}</span>
             </Link>

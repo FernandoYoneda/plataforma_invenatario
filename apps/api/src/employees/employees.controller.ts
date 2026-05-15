@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -29,8 +30,13 @@ export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   @Get()
-  findAll() {
-    return this.employeesService.findAll();
+  findAll(@Query('status') status?: string) {
+    return this.employeesService.findAll(status);
+  }
+
+  @Get(':id/assignments')
+  findAssignments(@Param('id') id: string) {
+    return this.employeesService.findAssignments(id);
   }
 
   @Post()
@@ -45,9 +51,15 @@ export class EmployeesController {
     return this.employeesService.update(id, dto);
   }
 
+  @Patch(':id/inactivate')
+  @Roles(Role.ADMIN)
+  inactivate(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.employeesService.inactivate(id, req.user?.id);
+  }
+
   @Delete(':id')
   @Roles(Role.ADMIN)
-  remove(@Param('id') id: string) {
-    return this.employeesService.remove(id);
+  remove(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.employeesService.inactivate(id, req.user?.id);
   }
 }

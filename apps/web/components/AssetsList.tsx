@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   getActiveAssignments,
   getAssets,
@@ -114,6 +114,7 @@ function sortValue(asset: Asset, key: SortKey, categories: Category[], locations
 
 export default function AssetsList() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +135,9 @@ export default function AssetsList() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const locationIdFromQuery = searchParams.get("locationId") ?? "";
+  const queryLocationName =
+    locations.find((item) => item.id === locationIdFromQuery)?.name ?? "";
 
   function handleAuthError(err: unknown) {
     if (
@@ -225,7 +229,7 @@ export default function AssetsList() {
       const message =
         err instanceof Error
           ? err.message
-          : "Nao foi possivel carregar categorias e localizacoes.";
+          : "Nao foi possivel carregar categorias e localizações.";
 
       handleAuthError(err);
       setReferencesError(message);
@@ -239,6 +243,10 @@ export default function AssetsList() {
 
     load();
   }, [router]);
+
+  useEffect(() => {
+    setLocationFilter(locationIdFromQuery);
+  }, [locationIdFromQuery]);
 
   const filteredAssets = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -321,6 +329,12 @@ export default function AssetsList() {
     setLocationFilter("");
   }
 
+  function clearLocationQueryFilter() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("locationId");
+    router.replace(params.toString() ? `/assets?${params.toString()}` : "/assets");
+  }
+
   function handleSort(nextKey: SortKey) {
     if (sortKey === nextKey) {
       setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
@@ -359,6 +373,7 @@ export default function AssetsList() {
       current="assets"
       title="Assets"
       subtitle="Consulta principal de ativos, com criacao, atribuicoes e historico disponiveis na mesma tela."
+      contentSize="wide"
       actions={
         <NewAssetModal
           onCreated={(asset) => {
@@ -368,6 +383,33 @@ export default function AssetsList() {
         />
       }
     >
+          {locationIdFromQuery ? (
+            <section className="surface-soft flex flex-col gap-3 rounded-[24px] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm [color:var(--text-secondary)]">
+                <span className="font-medium [color:var(--text-primary)]">
+                  Filtro aplicado:
+                </span>{" "}
+                Localização {queryLocationName || "Selecionada"}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={clearLocationQueryFilter}
+                  className="btn-secondary px-4 py-2.5 text-sm"
+                >
+                  Limpar filtro
+                </button>
+                <Link
+                  href="/dashboard"
+                  className="btn-secondary px-4 py-2.5 text-sm"
+                >
+                  Voltar ao Dashboard
+                </Link>
+              </div>
+            </section>
+          ) : null}
+
           <ActiveAssignmentsPanel
             assignments={activeAssignments}
             loading={loadingAssignments}
@@ -401,7 +443,7 @@ export default function AssetsList() {
 
             {!redirecting && !error && !loading ? (
               <div className="border-b px-6 py-5 [border-color:var(--border-soft)]">
-                <div className="grid gap-4 lg:grid-cols-[minmax(14rem,1.4fr)_repeat(4,minmax(9rem,1fr))_auto] lg:items-end">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(14rem,1.4fr)_repeat(4,minmax(9rem,1fr))_auto] 2xl:items-end">
                   <label className="block text-sm">
                     <span className="font-medium [color:var(--text-primary)]">
                       Buscar
@@ -470,7 +512,7 @@ export default function AssetsList() {
 
                   <label className="block text-sm">
                     <span className="font-medium [color:var(--text-primary)]">
-                      Localizacao
+                      Localização
                     </span>
                     <select
                       value={locationFilter}
@@ -537,9 +579,9 @@ export default function AssetsList() {
                         <th>Serial</th>
                         <th>{sortableHeader("status", "Status")}</th>
                         <th>{sortableHeader("category", "Categoria")}</th>
-                        <th>{sortableHeader("location", "Localizacao")}</th>
+                        <th>{sortableHeader("location", "Localização")}</th>
                         <th className="text-right">Valor</th>
-                        <th className="text-right">Acoes</th>
+                        <th className="asset-actions-column text-right">Acoes</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -554,8 +596,8 @@ export default function AssetsList() {
                           <td>{assetCategoryName(asset, categories)}</td>
                           <td>{assetLocationName(asset, locations)}</td>
                           <td className="text-right">{moneyBRL(asset.valueCents)}</td>
-                          <td>
-                            <div className="flex justify-end gap-2">
+                          <td className="asset-actions-column">
+                            <div className="asset-actions-row">
                               <AssignAssetModal
                                 asset={asset}
                                 onAssigned={(assignment) => {

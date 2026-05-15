@@ -34,6 +34,7 @@ export type Employee = {
   email: string;
   department?: string | null;
   position?: string | null;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -71,13 +72,13 @@ export type AssetAttachment = {
 export type Assignment = {
   id: string;
   assetId: string;
-  employeeId: string;
+  employeeId: string | null;
   assignedAt: string;
   returnedAt?: string | null;
   notes?: string | null;
   createdAt: string;
   asset?: Asset;
-  employee?: Employee;
+  employee?: Employee | null;
 };
 
 export type CreateAssetInput = {

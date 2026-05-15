@@ -47,6 +47,7 @@ model Employee {
   email      String   @unique
   department String?
   position   String?
+  isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -123,14 +124,14 @@ model AssetAttachment {
 model Assignment {
   id         String    @id @default(uuid())
   assetId    String
-  employeeId String
+  employeeId String?
   assignedAt DateTime  @default(now())
   returnedAt DateTime?
   notes      String?
   createdAt  DateTime  @default(now())
 
   asset    Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
   @@index([assetId, returnedAt])
   @@index([employeeId, returnedAt])

@@ -209,9 +209,9 @@ export default function AssetQrCodeModal({ asset }: { asset: Asset }) {
             </button>
           </div>
 
-          <div className="px-6 py-6">
+          <div className="modal-scroll-body px-6 py-6">
             <div className="grid gap-6 md:grid-cols-[auto_1fr] md:items-center">
-              <div className="flex h-[18rem] w-full items-center justify-center rounded-[24px] border bg-white p-4 [border-color:var(--border-soft)] md:w-[18rem]">
+              <div className="qr-code-frame flex items-center justify-center rounded-[24px] border bg-white p-4 [border-color:var(--border-soft)]">
                 {error ? (
                   <div className="status-banner-error rounded-[18px] px-4 py-3 text-sm">
                     {error}
@@ -242,7 +242,7 @@ export default function AssetQrCodeModal({ asset }: { asset: Asset }) {
                   type="button"
                   onClick={handlePrint}
                   disabled={!qrDataUrl}
-                  className="btn-primary mt-6 px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+                  className="btn-primary mt-6 w-full px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                 >
                   Imprimir etiqueta
                 </button>

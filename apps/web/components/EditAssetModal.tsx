@@ -156,7 +156,7 @@ export default function EditAssetModal({
         const message =
           err instanceof Error
             ? err.message
-            : "Nao foi possivel carregar categorias e localizacoes.";
+            : "Nao foi possivel carregar categorias e localizações.";
         setReferencesError(message);
       } finally {
         if (active) {
@@ -363,7 +363,7 @@ export default function EditAssetModal({
 
                 <label className="text-sm">
                   <span className="font-medium [color:var(--text-primary)]">
-                    Localizacao
+                    Localização
                   </span>
                   <select
                     value={locationId}
@@ -373,8 +373,8 @@ export default function EditAssetModal({
                   >
                     <option value="">
                       {loadingReferences
-                        ? "Carregando localizacoes..."
-                        : "Sem localizacao"}
+                        ? "Carregando localizações..."
+                        : "Sem localização"}
                     </option>
                     {locations.map((item) => (
                       <option key={item.id} value={item.id}>

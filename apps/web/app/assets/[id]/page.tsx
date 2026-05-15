@@ -197,6 +197,7 @@ export default function AssetDetailsPage() {
           ? title || "Consulta detalhada do ativo"
           : "Consulta detalhada do ativo e historico de movimentacoes."
       }
+      contentSize="standard"
       actions={actions}
     >
       {redirecting ? (
@@ -251,7 +252,7 @@ export default function AssetDetailsPage() {
                 value={fieldValue(asset.category?.name)}
               />
               <DetailItem
-                label="Localizacao"
+                label="Localização"
                 value={fieldValue(asset.location?.name)}
               />
               <DetailItem
@@ -308,10 +309,12 @@ export default function AssetDetailsPage() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <div className="font-semibold [color:var(--text-primary)]">
-                            {assignment.employee?.name ?? assignment.employeeId}
+                            {assignment.employee?.name ??
+                              assignment.employeeId ??
+                              "Funcionario removido"}
                           </div>
                           <div className="mt-1 text-sm [color:var(--text-secondary)]">
-                            {assignment.employee?.email ?? "Sem email"}
+                            {assignment.employee?.email ?? "Funcionario removido"}
                           </div>
                         </div>
                         <div className="status-pill">
