@@ -13,6 +13,21 @@ import {
 import { getAuthToken } from "@/lib/auth";
 import type { Asset, Assignment, Employee } from "@/lib/types";
 
+type FilterState = {
+  search: string;
+  categoryId: string;
+  locationId: string;
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  DESKTOP: "Desktop",
+  NOTEBOOK: "Notebook",
+  MONITOR: "Monitor",
+  MOUSE: "Mouse",
+  TECLADO: "Teclado",
+  OUTRO: "Outro",
+};
+
 function formatDate(value?: string | null) {
   if (!value) return "-";
   return new Date(value).toLocaleString("pt-BR");
@@ -20,9 +35,12 @@ function formatDate(value?: string | null) {
 
 function assetTitle(asset?: Asset | null) {
   if (!asset) return "-";
-  return [asset.internalCode, asset.brand, asset.model]
-    .filter(Boolean)
-    .join(" - ");
+  return [asset.internalCode, asset.brand, asset.model].filter(Boolean).join(" - ");
+}
+
+function typeLabel(value?: string | null) {
+  if (!value) return "-";
+  return TYPE_LABELS[value] ?? value;
 }
 
 function EmployeeIcon() {
@@ -33,12 +51,6 @@ function EmployeeIcon() {
     </svg>
   );
 }
-
-type FilterState = {
-  search: string;
-  categoryId: string;
-  locationId: string;
-};
 
 export default function EmployeeAssignmentsModal({
   employee,
@@ -214,6 +226,18 @@ export default function EmployeeAssignmentsModal({
     ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [assets]);
 
+  const selectedAsset = useMemo(
+    () => availableAssets.find((asset) => asset.id === selectedAssetId) ?? null,
+    [availableAssets, selectedAssetId],
+  );
+
+  useEffect(() => {
+    if (selectedAssetId && !selectedAsset) {
+      setSelectedAssetId("");
+      setAssignmentNotes("");
+    }
+  }, [selectedAsset, selectedAssetId]);
+
   function close() {
     if (!loading && !actionLoadingId) {
       setOpen(false);
@@ -297,6 +321,12 @@ export default function EmployeeAssignmentsModal({
   }
 
   async function handleReturn(assignmentId: string) {
+    const confirmed = window.confirm(
+      "Deseja devolver este ativo? O assignment sera encerrado.",
+    );
+
+    if (!confirmed) return;
+
     const token = getAuthToken();
     if (!token) {
       toast.error("Sessao expirada. Faca login novamente.");
@@ -335,7 +365,7 @@ export default function EmployeeAssignmentsModal({
         >
           <div className="flex flex-col gap-3 border-b px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="eyebrow">Funcionário</p>
+              <p className="eyebrow">Funcionario</p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
                 {employee.name}
               </h2>
@@ -350,7 +380,7 @@ export default function EmployeeAssignmentsModal({
                 onClick={() => setAssignPanelOpen((current) => !current)}
                 className="btn-primary px-4 py-2.5 text-sm"
               >
-                {assignPanelOpen ? "Fechar atribuicao" : "Atribuir ativo"}
+                {assignPanelOpen ? "Fechar atribuicao" : "+ Atribuir ativo"}
               </button>
 
               <button
@@ -464,6 +494,7 @@ export default function EmployeeAssignmentsModal({
                               <tr>
                                 <th></th>
                                 <th>Codigo</th>
+                                <th>Tipo</th>
                                 <th>Marca</th>
                                 <th>Modelo</th>
                                 <th>Serial</th>
@@ -493,6 +524,7 @@ export default function EmployeeAssignmentsModal({
                                     </button>
                                   </td>
                                   <td className="cell-strong">{asset.internalCode}</td>
+                                  <td>{typeLabel(asset.type)}</td>
                                   <td>{asset.brand}</td>
                                   <td>{asset.model ?? "-"}</td>
                                   <td>{asset.serialNumber ?? "-"}</td>
@@ -505,19 +537,14 @@ export default function EmployeeAssignmentsModal({
                         )}
                       </div>
 
-                      {selectedAssetId ? (
+                      {selectedAsset ? (
                         <div className="mt-4 surface-soft rounded-[24px] px-4 py-4">
                           <div className="font-semibold [color:var(--text-primary)]">
-                            {assetTitle(
-                              availableAssets.find((asset) => asset.id === selectedAssetId),
-                            )}
+                            {assetTitle(selectedAsset)}
                           </div>
                           <div className="mt-2 text-sm [color:var(--text-secondary)]">
-                            {availableAssets.find((asset) => asset.id === selectedAssetId)
-                              ?.category?.name ?? "Sem categoria"}{" "}
-                            |{" "}
-                            {availableAssets.find((asset) => asset.id === selectedAssetId)
-                              ?.location?.name ?? "Sem localizacao"}
+                            {selectedAsset.category?.name ?? "Sem categoria"} |{" "}
+                            {selectedAsset.location?.name ?? "Sem localizacao"}
                           </div>
 
                           <label className="mt-4 block text-sm">
@@ -539,7 +566,7 @@ export default function EmployeeAssignmentsModal({
                               disabled={Boolean(actionLoadingId)}
                               className="btn-primary px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
                             >
-                              {actionLoadingId === selectedAssetId
+                              {actionLoadingId === selectedAsset.id
                                 ? "Atribuindo..."
                                 : "Confirmar atribuicao"}
                             </button>
@@ -585,8 +612,10 @@ export default function EmployeeAssignmentsModal({
                                 {assetTitle(assignment.asset)}
                               </div>
                               <div className="mt-1 text-sm [color:var(--text-secondary)]">
-                                {assignment.asset?.category?.name ?? "Sem categoria"}{" "}
-                                | {assignment.asset?.location?.name ?? "Sem localizacao"}
+                                Codigo: {assignment.asset?.internalCode ?? "-"} | Tipo:{" "}
+                                {typeLabel(assignment.asset?.type)} | Marca:{" "}
+                                {assignment.asset?.brand ?? "-"} | Modelo:{" "}
+                                {assignment.asset?.model ?? "-"}
                               </div>
                             </div>
                             <div className="status-pill">Ativo</div>
@@ -646,8 +675,8 @@ export default function EmployeeAssignmentsModal({
                                 {assetTitle(assignment.asset)}
                               </div>
                               <div className="mt-1 text-sm [color:var(--text-secondary)]">
-                                {assignment.asset?.category?.name ?? "Sem categoria"}{" "}
-                                | {assignment.asset?.location?.name ?? "Sem localizacao"}
+                                {assignment.asset?.category?.name ?? "Sem categoria"} |{" "}
+                                {assignment.asset?.location?.name ?? "Sem localizacao"}
                               </div>
                             </div>
                             <div className="status-pill">Encerrado</div>
