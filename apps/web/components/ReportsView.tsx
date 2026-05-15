@@ -357,14 +357,14 @@ export default function ReportsView() {
     { label: "Total de ativos", value: report.total },
     { label: "Ativos atribuidos", value: report.assigned },
     { label: "Ativos disponiveis", value: report.available },
-    { label: "Funcionarios", value: employees.length },
+      { label: "Funcionários", value: employees.length },
   ];
 
   return (
     <AppShell
       current="reports"
-      title="Relatorios"
-      subtitle="Indicadores operacionais do inventario e exportacao dos ativos filtrados."
+      title="Relatórios"
+      subtitle="Indicadores operacionais do inventário e exportação dos ativos filtrados."
       contentSize="wide"
       actions={
         <button
@@ -573,7 +573,7 @@ export default function ReportsView() {
             <article className="surface-card rounded-[30px] p-6">
               <div className="mb-6">
                 <h2 className="text-lg font-semibold [color:var(--text-primary)]">
-                  Exportacao
+                  Exportação
                 </h2>
                 <p className="mt-1 text-sm [color:var(--text-secondary)]">
                   O CSV usa a selecao filtrada atual.
@@ -581,19 +581,19 @@ export default function ReportsView() {
               </div>
               <div className="space-y-3 text-sm [color:var(--text-secondary)]">
                 <div className="flex justify-between gap-4">
-                  <span>Assets no arquivo</span>
+                  <span>Ativos no arquivo</span>
                   <strong className="[color:var(--text-primary)]">
                     {filteredAssets.length}
                   </strong>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <span>Assignments ativos</span>
+                  <span>Atribuições ativas</span>
                   <strong className="[color:var(--text-primary)]">
                     {assignments.length}
                   </strong>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <span>Funcionarios carregados</span>
+                  <span>Funcionários carregados</span>
                   <strong className="[color:var(--text-primary)]">
                     {employees.length}
                   </strong>
@@ -605,7 +605,7 @@ export default function ReportsView() {
                 disabled={loading || filteredAssets.length === 0}
                 className="btn-primary mt-6 w-full px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Exportar assets filtrados
+                Exportar ativos filtrados
               </button>
             </article>
           </section>

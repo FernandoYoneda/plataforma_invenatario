@@ -95,11 +95,11 @@ const mainItems: Array<{
   icon: ReactNode;
 }> = [
   { key: "dashboard", href: "/dashboard", label: "Dashboard", icon: <DashboardIcon /> },
-  { key: "assets", href: "/assets", label: "Assets", icon: <AssetsIcon /> },
-  { key: "employees", href: "/employees", label: "Funcionarios", icon: <EmployeesIcon /> },
+  { key: "assets", href: "/assets", label: "Ativos", icon: <AssetsIcon /> },
+  { key: "employees", href: "/employees", label: "Funcionários", icon: <EmployeesIcon /> },
   { key: "categories", href: "/categories", label: "Categorias", icon: <CategoriesIcon /> },
   { key: "locations", href: "/locations", label: "Localizações", icon: <LocationsIcon /> },
-  { key: "reports", href: "/reports", label: "Relatorios", icon: <ReportsIcon /> },
+  { key: "reports", href: "/reports", label: "Relatórios", icon: <ReportsIcon /> },
   { key: "audit", href: "/audit", label: "Auditoria", icon: <AuditIcon /> },
 ];
 
@@ -110,32 +110,30 @@ export default function AppNavigation({
   mobileOpen = false,
   onClose,
   onNavigate,
+  theme,
+  onThemeChange,
 }: {
   current: NavKey;
   mobileOpen?: boolean;
   onClose?: () => void;
   onNavigate?: () => void;
+  theme: "light" | "dark";
+  onThemeChange: (theme: "light" | "dark") => void;
 }) {
   const itemClass = (key: NavKey) =>
-    key === current
-      ? "app-nav-item app-nav-item-active"
-      : "app-nav-item";
+    key === current ? "app-nav-item app-nav-item-active" : "app-nav-item";
 
   return (
     <aside
       className={`app-sidebar ${mobileOpen ? "app-sidebar-open" : ""}`}
-      aria-label="Navegacao principal"
+      aria-label="Navegação principal"
     >
       <div className="app-sidebar-inner">
         <div className="app-sidebar-mobile-top">
           <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/54">
-            Navegacao
+            Navegação
           </span>
-          <button
-            type="button"
-            className="app-sidebar-close"
-            onClick={onClose}
-          >
+          <button type="button" className="app-sidebar-close" onClick={onClose}>
             Fechar
           </button>
         </div>
@@ -166,6 +164,30 @@ export default function AppNavigation({
             </Link>
           ))}
         </nav>
+
+        <section className="mt-3 rounded-[1.15rem] border border-white/10 bg-white/6 p-3">
+          <div className="px-1 text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-white/48">
+            Tema
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => onThemeChange("light")}
+              className={theme === "light" ? "theme-toggle-option theme-toggle-option-active" : "theme-toggle-option"}
+              aria-pressed={theme === "light"}
+            >
+              Claro
+            </button>
+            <button
+              type="button"
+              onClick={() => onThemeChange("dark")}
+              className={theme === "dark" ? "theme-toggle-option theme-toggle-option-active" : "theme-toggle-option"}
+              aria-pressed={theme === "dark"}
+            >
+              Escuro
+            </button>
+          </div>
+        </section>
 
         {futureItems.length > 0 ? (
           <div className="mt-8">

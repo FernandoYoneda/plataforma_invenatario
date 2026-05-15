@@ -25,7 +25,7 @@ const TYPES: { value: AssetType; label: string }[] = [
 const STATUS: { value: AssetStatus; label: string }[] = [
   { value: "EM_USO", label: "Em uso" },
   { value: "ESTOQUE", label: "Estoque" },
-  { value: "MANUTENCAO", label: "Manutencao" },
+  { value: "MANUTENCAO", label: "Manutenção" },
   { value: "BAIXADO", label: "Baixado" },
 ];
 
@@ -219,12 +219,12 @@ export default function NewAssetModal({
         token,
       );
 
-      toast.success("Asset criado com sucesso.");
+      toast.success("Ativo criado com sucesso.");
       resetForm();
       setOpen(false);
       onCreated(asset);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Erro ao criar asset.";
+      const message = err instanceof Error ? err.message : "Erro ao criar ativo.";
       setError(message);
       toast.error(message);
     } finally {
@@ -245,7 +245,7 @@ export default function NewAssetModal({
             <div>
               <p className="eyebrow">Cadastro</p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
-                Novo Asset
+                Novo Ativo
               </h2>
             </div>
 
@@ -441,7 +441,7 @@ export default function NewAssetModal({
                 disabled={loading}
                 className="btn-primary px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {loading ? "Criando..." : "Criar asset"}
+                {loading ? "Criando..." : "Criar ativo"}
               </button>
             </div>
           </form>
@@ -460,7 +460,7 @@ export default function NewAssetModal({
         }}
         className="btn-primary px-4 py-2.5 text-sm"
       >
-        Novo Asset
+        Novo Ativo
       </button>
 
       {open && mounted ? createPortal(modal, document.body) : null}

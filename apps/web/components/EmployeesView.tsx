@@ -6,6 +6,7 @@ import { getEmployeesList } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import type { Employee } from "@/lib/types";
 import AppShell from "./AppShell";
+import ImportEmployeesModal from "./ImportEmployeesModal";
 import DeleteEmployeeButton from "./DeleteEmployeeButton";
 import EmployeeAssignmentsModal from "./EmployeeAssignmentsModal";
 import NewEmployeeModal from "./NewEmployeeModal";
@@ -19,6 +20,19 @@ export default function EmployeesView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
+
+  function appendImportedEmployees(importedEmployees: Employee[]) {
+    if (filter === "inactive") {
+      return;
+    }
+
+    setEmployees((current) =>
+      [...current, ...importedEmployees].sort((a, b) =>
+        a.name.localeCompare(b.name, "pt-BR"),
+      ),
+    );
+    setError(null);
+  }
 
   function handleAuthError(err: unknown) {
     if (
@@ -57,7 +71,7 @@ export default function EmployeesView() {
         const message =
           err instanceof Error
             ? err.message
-            : "Nao foi possivel carregar os funcionarios.";
+            : "Não foi possível carregar os funcionários.";
 
         handleAuthError(err);
         setError(message);
@@ -72,24 +86,19 @@ export default function EmployeesView() {
   return (
     <AppShell
       current="employees"
-      title="Funcionarios"
-      subtitle="Cadastro e consulta da base de colaboradores usada nas atribuicoes de assets."
+      title="Funcionários"
+      subtitle="Cadastro e consulta da base de colaboradores usada nas atribuições de ativos."
       contentSize="compact"
       actions={
-        <NewEmployeeModal
-          onCreated={(employee) => {
-            if (filter === "inactive") {
-              return;
-            }
-
-            setEmployees((current) =>
-              [...current, employee].sort((a, b) =>
-                a.name.localeCompare(b.name, "pt-BR"),
-              ),
-            );
-            setError(null);
-          }}
-        />
+        <div className="flex flex-wrap gap-3">
+          <ImportEmployeesModal
+            employees={employees}
+            onImported={appendImportedEmployees}
+          />
+          <NewEmployeeModal
+            onCreated={(employee) => appendImportedEmployees([employee])}
+          />
+        </div>
       }
     >
       <section className="overflow-hidden rounded-[30px] border [border-color:var(--border-soft)] bg-[rgba(255,255,255,0.72)] shadow-[0_18px_50px_rgba(23,58,67,0.08)] backdrop-blur">
@@ -99,14 +108,14 @@ export default function EmployeesView() {
               ? "Redirecionando..."
               : loading
                 ? "Carregando..."
-                : `${employees.length} funcionario(s)`}
+                : `${employees.length} funcionário(s)`}
           </div>
 
           <div className="flex flex-wrap gap-2">
             {[
-              { key: "active", label: "Ativos" },
-              { key: "inactive", label: "Inativos" },
-              { key: "all", label: "Todos" },
+                { key: "active", label: "Ativos" },
+                { key: "inactive", label: "Inativos" },
+                { key: "all", label: "Todos" },
             ].map((item) => (
               <button
                 key={item.key}
@@ -134,15 +143,15 @@ export default function EmployeesView() {
           </div>
         ) : loading ? (
           <div className="px-6 py-10 text-sm [color:var(--text-secondary)]">
-            Buscando funcionarios...
+            Buscando funcionários...
           </div>
         ) : employees.length === 0 ? (
           <div className="px-6 py-10 text-sm [color:var(--text-secondary)]">
             {filter === "inactive"
-              ? "Nenhum funcionario inativo encontrado."
+              ? "Nenhum funcionário inativo encontrado."
               : filter === "all"
-                ? "Nenhum funcionario cadastrado ainda."
-                : "Nenhum funcionario ativo cadastrado ainda."}
+                ? "Nenhum funcionário cadastrado ainda."
+                : "Nenhum funcionário ativo cadastrado ainda."}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -154,7 +163,7 @@ export default function EmployeesView() {
                   <th>Departamento</th>
                   <th>Cargo</th>
                   <th>Status</th>
-                  <th>Acoes</th>
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody>

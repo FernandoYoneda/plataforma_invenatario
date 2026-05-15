@@ -122,27 +122,27 @@ export default function DashboardView() {
 
   const cards = [
     {
-      label: "Total de assets",
+      label: "Total de ativos",
       value: metrics.totalAssets,
       accent: "rgba(44,100,112,0.16)",
     },
     {
-      label: "Assets em estoque",
+      label: "Ativos em estoque",
       value: metrics.assetsInStock,
       accent: "rgba(215,121,103,0.16)",
     },
     {
-      label: "Assets atribuidos",
+      label: "Ativos atribuídos",
       value: metrics.assetsAssigned,
       accent: "rgba(23,58,67,0.12)",
     },
     {
-      label: "Assets em manutencao",
+      label: "Ativos em manutenção",
       value: metrics.assetsInMaintenance,
       accent: "rgba(215,121,103,0.12)",
     },
     {
-      label: "Assignments ativos",
+      label: "Atribuições ativas",
       value: metrics.activeAssignments,
       accent: "rgba(44,100,112,0.1)",
     },
@@ -208,7 +208,7 @@ export default function DashboardView() {
                   </div>
                 ) : locationBreakdown.items.length === 0 ? (
                   <div className="px-6 py-8 text-sm [color:var(--text-secondary)]">
-                    Nenhum asset com localização cadastrada.
+                    Nenhum ativo com localização cadastrada.
                   </div>
                 ) : (
                   <div className="grid gap-3 p-6 sm:grid-cols-2 xl:grid-cols-3">
@@ -229,7 +229,7 @@ export default function DashboardView() {
                               {location.name}
                             </div>
                             <div className="mt-1 text-xs [color:var(--text-secondary)]">
-                              {location.count} asset(s)
+                              {location.count} ativo(s)
                             </div>
                           </div>
                           <div className="status-pill">{location.percent}%</div>
@@ -248,7 +248,7 @@ export default function DashboardView() {
 
                 {locationBreakdown.withoutLocation > 0 ? (
                   <div className="border-t px-6 py-4 text-sm [border-color:var(--border-soft)] [color:var(--text-secondary)]">
-                    {locationBreakdown.withoutLocation} asset(s) sem localização
+                    {locationBreakdown.withoutLocation} ativo(s) sem localização
                     vinculada.
                   </div>
                 ) : null}
@@ -258,7 +258,7 @@ export default function DashboardView() {
                 <div className="flex flex-col gap-2 border-b px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <h2 className="text-lg font-semibold [color:var(--text-primary)]">
-                      Assignments ativos
+                      Atribuições ativas
                     </h2>
                     <p className="mt-1 text-sm [color:var(--text-secondary)]">
                       Ultimos registros disponiveis no endpoint atual.
@@ -282,8 +282,8 @@ export default function DashboardView() {
                     <table className="data-table data-table-compact">
                       <thead>
                         <tr>
-                          <th>Asset</th>
-                          <th>Funcionario</th>
+                          <th>Ativo</th>
+                          <th>Funcionário</th>
                           <th>Atribuido em</th>
                           <th>Observacoes</th>
                         </tr>
@@ -296,17 +296,17 @@ export default function DashboardView() {
                                 {assignment.asset?.internalCode ?? assignment.assetId}
                               </div>
                               <div className="mt-1 text-xs [color:var(--text-muted)]">
-                                {assignment.asset?.brand ?? "Asset"}
+                                {assignment.asset?.brand ?? "Ativo"}
                               </div>
                             </td>
                             <td>
                               <div className="cell-strong">
                                 {assignment.employee?.name ??
                                   assignment.employeeId ??
-                                  "Funcionario removido"}
+                                  "Funcionário removido"}
                               </div>
                               <div className="mt-1 text-xs [color:var(--text-muted)]">
-                                {assignment.employee?.email ?? "Funcionario removido"}
+                                {assignment.employee?.email ?? "Funcionário removido"}
                               </div>
                             </td>
                             <td>{formatDate(assignment.assignedAt)}</td>
@@ -321,8 +321,8 @@ export default function DashboardView() {
 
               {!loading && assets.length === 0 && assignments.length === 0 && (
                 <section className="surface-card rounded-[28px] px-6 py-8 text-sm [color:var(--text-secondary)]">
-                  O inventario ainda nao possui assets nem assignments. Cadastre o
-                  primeiro asset para iniciar o acompanhamento.
+                  O inventário ainda não possui ativos nem atribuições. Cadastre o
+                  primeiro ativo para iniciar o acompanhamento.
                 </section>
               )}
             </>

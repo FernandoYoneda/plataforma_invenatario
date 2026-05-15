@@ -89,13 +89,13 @@ export default function NewEmployeeModal({
         token,
       );
 
-      toast.success("Funcionario criado com sucesso.");
+      toast.success("Funcionário criado com sucesso.");
       resetForm();
       setOpen(false);
       onCreated(employee);
     } catch (err: unknown) {
       const rawMessage =
-        err instanceof Error ? err.message : "Nao foi possivel criar o funcionario.";
+        err instanceof Error ? err.message : "Não foi possível criar o funcionário.";
 
       const message =
         rawMessage.toLowerCase().includes("email") ||
@@ -122,8 +122,8 @@ export default function NewEmployeeModal({
           <div className="flex items-center justify-between border-b px-6 py-5 [border-color:var(--border-soft)]">
             <div>
               <p className="eyebrow">Cadastro</p>
-              <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
-                Novo Funcionario
+        <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
+                Novo Funcionário
               </h2>
             </div>
 
@@ -141,7 +141,7 @@ export default function NewEmployeeModal({
             <div className="space-y-4 px-6 py-5">
               <label className="block text-sm">
                 <span className="font-medium [color:var(--text-primary)]">
-                  Nome *
+                Nome *
                 </span>
                 <input
                   value={name}
@@ -153,7 +153,7 @@ export default function NewEmployeeModal({
 
               <label className="block text-sm">
                 <span className="font-medium [color:var(--text-primary)]">
-                  Email *
+                Email *
                 </span>
                 <input
                   type="email"

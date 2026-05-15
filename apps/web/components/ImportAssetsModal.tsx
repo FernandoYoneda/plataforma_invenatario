@@ -57,9 +57,9 @@ const FIELD_CONFIGS: Array<{
 }> = [
   {
     field: "internalCode",
-    label: "Codigo",
+    label: "Código",
     required: true,
-    help: "Codigo interno do asset.",
+    help: "Código interno do ativo.",
   },
   {
     field: "type",
@@ -71,13 +71,13 @@ const FIELD_CONFIGS: Array<{
     field: "brand",
     label: "Marca",
     required: true,
-    help: "Marca do asset.",
+    help: "Marca do ativo.",
   },
   {
     field: "model",
     label: "Modelo",
     required: true,
-    help: "Modelo do asset.",
+    help: "Modelo do ativo.",
   },
   {
     field: "categoryName",
@@ -87,15 +87,15 @@ const FIELD_CONFIGS: Array<{
   },
   {
     field: "locationName",
-    label: "LocalizaÃ§Ã£o",
+    label: "Localização",
     required: false,
-    help: "Nome da localizaÃ§Ã£o existente.",
+    help: "Nome da localização existente.",
   },
   {
     field: "serialNumber",
     label: "Serial",
     required: false,
-    help: "NÃºmero de sÃ©rie, se houver.",
+    help: "Número de série, se houver.",
   },
   {
     field: "valueCents",
@@ -105,9 +105,9 @@ const FIELD_CONFIGS: Array<{
   },
   {
     field: "notes",
-    label: "ObservaÃ§Ãµes",
+    label: "Observações",
     required: false,
-    help: "ObservaÃ§Ãµes adicionais.",
+    help: "Observações adicionais.",
   },
 ];
 
@@ -266,7 +266,7 @@ function validateRows(
     const locationName = valueByMapping(row, mapping, "locationName");
     const status = valueByMapping(row, mapping, "status");
 
-    if (!code) errors.push("Codigo e obrigatorio");
+    if (!code) errors.push("Código é obrigatório");
     if (!typeInput) errors.push("Tipo e obrigatorio");
     if (!brand) errors.push("Marca e obrigatoria");
     if (!model) errors.push("Modelo e obrigatorio");
@@ -274,11 +274,11 @@ function validateRows(
     const normalizedCode = normalizeText(code);
     if (code) {
       if (existingCodes.has(normalizedCode)) {
-        errors.push("Codigo duplicado no banco");
+        errors.push("Código duplicado no banco");
       }
 
       if (seenCodes.has(normalizedCode)) {
-        errors.push("Codigo duplicado na planilha");
+        errors.push("Código duplicado na planilha");
       }
     }
 
@@ -304,7 +304,7 @@ function validateRows(
     }
 
     if (locationName && !locationLookup.has(normalizeText(locationName))) {
-      errors.push("Localizacao nao encontrada");
+      errors.push("Localização não encontrada");
     }
 
     if (code) {
@@ -491,7 +491,7 @@ export default function ImportAssetsModal({
       );
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "Nao foi possivel importar os assets.";
+        err instanceof Error ? err.message : "Não foi possível importar os ativos.";
       setPreviewError(message);
       toast.error(message);
     } finally {
@@ -707,12 +707,12 @@ export default function ImportAssetsModal({
                       <thead>
                         <tr>
                           <th>Linha</th>
-                          <th>Codigo</th>
+                          <th>Código</th>
                           <th>Tipo</th>
                           <th>Marca</th>
                           <th>Modelo</th>
                           <th>Categoria</th>
-                          <th>Localizacao</th>
+                          <th>Localização</th>
                           <th>Status</th>
                         </tr>
                       </thead>

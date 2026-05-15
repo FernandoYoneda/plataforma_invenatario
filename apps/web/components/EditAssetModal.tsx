@@ -26,7 +26,7 @@ const TYPES: { value: AssetType; label: string }[] = [
 const STATUS: { value: AssetStatus; label: string }[] = [
   { value: "EM_USO", label: "Em uso" },
   { value: "ESTOQUE", label: "Estoque" },
-  { value: "MANUTENCAO", label: "Manutencao" },
+  { value: "MANUTENCAO", label: "Manutenção" },
   { value: "BAIXADO", label: "Baixado" },
 ];
 
@@ -40,7 +40,7 @@ function currentLocationId(asset: Asset) {
 
 function friendlyUpdateError(error: unknown) {
   const message =
-    error instanceof Error ? error.message : "Nao foi possivel atualizar o asset.";
+    error instanceof Error ? error.message : "Não foi possível atualizar o ativo.";
 
   if (message.toLowerCase().includes("valuecents")) {
     return "Este tipo exige valor cadastrado. Ajuste o asset antes de usar esse tipo.";
@@ -156,7 +156,7 @@ export default function EditAssetModal({
         const message =
           err instanceof Error
             ? err.message
-            : "Nao foi possivel carregar categorias e localizações.";
+            : "Não foi possível carregar categorias e localizações.";
         setReferencesError(message);
       } finally {
         if (active) {
@@ -254,7 +254,7 @@ export default function EditAssetModal({
         location: selectedLocation,
       };
 
-      toast.success("Asset atualizado com sucesso.");
+      toast.success("Ativo atualizado com sucesso.");
       setOpen(false);
       onUpdated?.(mergedAsset);
       if (!onUpdated) {
@@ -282,7 +282,7 @@ export default function EditAssetModal({
             <div>
               <p className="eyebrow">Edicao</p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
-                Editar Asset
+                Editar Ativo
               </h2>
               <p className="mt-1 text-sm [color:var(--text-secondary)]">
                 {asset.internalCode}
@@ -430,7 +430,7 @@ export default function EditAssetModal({
                     onChange={(event) => setNotes(event.target.value)}
                     className="brand-input mt-1.5"
                     rows={4}
-                    placeholder="Observacoes opcionais sobre o asset."
+                    placeholder="Observações opcionais sobre o ativo."
                   />
                 </label>
               </div>

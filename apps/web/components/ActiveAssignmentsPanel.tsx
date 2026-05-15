@@ -37,7 +37,7 @@ export default function ActiveAssignmentsPanel({
     const token = getAuthToken();
 
     if (!token) {
-      toast.error("Sessao expirada. Faca login novamente.");
+      toast.error("Sessão expirada. Faça login novamente.");
       return;
     }
 
@@ -45,11 +45,11 @@ export default function ActiveAssignmentsPanel({
 
     try {
       await returnAssignment(assignmentId, {}, token);
-      toast.success("Asset devolvido com sucesso.");
+      toast.success("Ativo devolvido com sucesso.");
       onReturned(assignmentId);
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "Nao foi possivel devolver o asset.";
+        err instanceof Error ? err.message : "Não foi possível devolver o ativo.";
       toast.error(message);
     } finally {
       setReturningId(null);
@@ -61,10 +61,10 @@ export default function ActiveAssignmentsPanel({
       <div className="flex flex-col gap-3 border-b px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold [color:var(--text-primary)]">
-            Assignments ativos
+            Atribuições ativas
           </h2>
           <p className="mt-1 text-sm [color:var(--text-secondary)]">
-            Controle rapido dos ativos atualmente vinculados a funcionarios.
+            Controle rápido dos ativos atualmente vinculados a funcionários.
           </p>
         </div>
         <div className="status-pill">
@@ -78,22 +78,22 @@ export default function ActiveAssignmentsPanel({
         </div>
       ) : loading ? (
         <div className="px-6 py-8 text-sm [color:var(--text-secondary)]">
-          Buscando assignments ativos...
+          Buscando atribuições ativas...
         </div>
       ) : assignments.length === 0 ? (
         <div className="px-6 py-8 text-sm [color:var(--text-secondary)]">
-          Nenhum assignment ativo no momento.
+          Nenhuma atribuição ativa no momento.
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="data-table data-table-compact">
             <thead>
               <tr>
-                <th>Asset</th>
-                <th>Funcionario</th>
-                <th>Atribuido em</th>
-                <th>Observacoes</th>
-                <th className="text-right">Acao</th>
+                <th>Ativo</th>
+                <th>Funcionário</th>
+                <th>Atribuído em</th>
+                <th>Observações</th>
+                <th className="text-right">Ação</th>
               </tr>
             </thead>
             <tbody>
@@ -104,17 +104,17 @@ export default function ActiveAssignmentsPanel({
                       {assignment.asset?.internalCode ?? assignment.assetId}
                     </div>
                     <div className="mt-1 text-xs [color:var(--text-muted)]">
-                      {assignment.asset?.brand ?? "Asset"}
+                      {assignment.asset?.brand ?? "Ativo"}
                     </div>
                   </td>
                   <td>
                     <div className="cell-strong">
-                    {assignment.employee?.name ??
-                      assignment.employeeId ??
-                      "Funcionario removido"}
+                      {assignment.employee?.name ??
+                        assignment.employeeId ??
+                        "Funcionário removido"}
                     </div>
                     <div className="mt-1 text-xs [color:var(--text-muted)]">
-                    {assignment.employee?.email ?? "Funcionario removido"}
+                      {assignment.employee?.email ?? "Funcionário removido"}
                     </div>
                   </td>
                   <td>{formatDate(assignment.assignedAt)}</td>

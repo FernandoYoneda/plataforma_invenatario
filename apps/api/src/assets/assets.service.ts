@@ -95,6 +95,17 @@ export class AssetsService {
     return trimmed.length > 0 ? trimmed : null;
   }
 
+  private describeAsset(asset: {
+    internalCode: string;
+    brand: string;
+    model?: string | null;
+  }) {
+    const details = [asset.brand, asset.model].filter(Boolean).join(' ');
+    return details
+      ? `Ativo ${asset.internalCode} — ${details}`
+      : `Ativo ${asset.internalCode}`;
+  }
+
   private normalizeText(value: unknown) {
     if (value === undefined || value === null) return '';
 
@@ -530,7 +541,7 @@ export class AssetsService {
       action: 'ASSET_CREATED',
       entityType: 'Asset',
       entityId: asset.id,
-      description: `Asset ${asset.internalCode} criado`,
+      description: `${this.describeAsset(asset)} criado`,
       userId,
     });
 
@@ -702,7 +713,7 @@ export class AssetsService {
       action: 'ASSET_UPDATED',
       entityType: 'Asset',
       entityId: asset.id,
-      description: `Asset ${asset.internalCode} atualizado`,
+      description: `${this.describeAsset(asset)} atualizado`,
       userId,
     });
 

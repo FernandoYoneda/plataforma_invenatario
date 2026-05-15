@@ -57,7 +57,7 @@ export default function AssignAssetModal({
 
       if (!token) {
         if (!active) return;
-        setEmployeesError("Sessao expirada. Faca login novamente.");
+        setEmployeesError("Sessão expirada. Faça login novamente.");
         setEmployees([]);
         return;
       }
@@ -75,7 +75,7 @@ export default function AssignAssetModal({
         const message =
           err instanceof Error
             ? err.message
-            : "Nao foi possivel carregar os funcionarios.";
+            : "Não foi possível carregar os funcionários.";
 
         setEmployees([]);
         setEmployeesError(message);
@@ -115,7 +115,7 @@ export default function AssignAssetModal({
     setError(null);
 
     if (!employeeId) {
-      const message = "Selecione um funcionario.";
+      const message = "Selecione um funcionário.";
       setError(message);
       toast.error(message);
       return;
@@ -124,7 +124,7 @@ export default function AssignAssetModal({
     const token = getAuthToken();
 
     if (!token) {
-      const message = "Sessao expirada. Faca login novamente.";
+      const message = "Sessão expirada. Faça login novamente.";
       setError(message);
       toast.error(message);
       return;
@@ -142,13 +142,13 @@ export default function AssignAssetModal({
         token,
       );
 
-      toast.success("Asset atribuido com sucesso.");
+      toast.success("Ativo atribuído com sucesso.");
       resetForm();
       setOpen(false);
       onAssigned(assignment);
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "Nao foi possivel atribuir o asset.";
+        err instanceof Error ? err.message : "Não foi possível atribuir o ativo.";
       setError(message);
       toast.error(message);
     } finally {
@@ -167,7 +167,7 @@ export default function AssignAssetModal({
         >
           <div className="flex items-center justify-between border-b px-6 py-5 [border-color:var(--border-soft)]">
             <div>
-              <p className="eyebrow">Atribuicao</p>
+              <p className="eyebrow">Atribuição</p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
                 Atribuir {asset.internalCode}
               </h2>
@@ -196,7 +196,7 @@ export default function AssignAssetModal({
 
               <label className="block text-sm">
                 <span className="font-medium [color:var(--text-primary)]">
-                  Funcionario
+                  Funcionário
                 </span>
                 <select
                   value={employeeId}
@@ -206,10 +206,10 @@ export default function AssignAssetModal({
                 >
                   <option value="">
                     {loadingEmployees
-                      ? "Carregando funcionarios..."
+                      ? "Carregando funcionários..."
                       : employees.length === 0
-                        ? "Nenhum funcionario cadastrado"
-                        : "Selecione um funcionario"}
+                        ? "Nenhum funcionário cadastrado"
+                        : "Selecione um funcionário"}
                   </option>
                   {employees.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -233,14 +233,14 @@ export default function AssignAssetModal({
 
               <label className="block text-sm">
                 <span className="font-medium [color:var(--text-primary)]">
-                  Observacoes
+                  Observações
                 </span>
                 <textarea
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   rows={4}
                   className="brand-input mt-1.5"
-                  placeholder="Observacoes opcionais da atribuicao."
+                  placeholder="Observações opcionais da atribuição."
                 />
               </label>
 
@@ -252,9 +252,9 @@ export default function AssignAssetModal({
 
               {!loadingEmployees && employees.length === 0 && !employeesError && (
                 <div className="surface-soft rounded-[22px] px-4 py-3 text-sm [color:var(--text-secondary)]">
-                  Nenhum funcionario cadastrado. O formulario continua disponivel,
-                  mas e necessario cadastrar um funcionario no backend para criar
-                  atribuicoes.
+                  Nenhum funcionário cadastrado. O formulário continua disponível,
+                  mas é necessário cadastrar um funcionário no backend para criar
+                  atribuições.
                 </div>
               )}
 

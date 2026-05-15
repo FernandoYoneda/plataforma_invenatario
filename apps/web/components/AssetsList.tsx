@@ -198,7 +198,7 @@ export default function AssetsList() {
       const message =
         err instanceof Error
           ? err.message
-          : "Nao foi possivel carregar categorias e localizações.";
+          : "Não foi possível carregar categorias e localizações.";
 
       handleAuthError(err);
       setReferencesError(message);
@@ -391,7 +391,7 @@ export default function AssetsList() {
   function sortLabel(key: SortKey) {
     if (sortKey !== key) return "";
 
-    return sortDirection === "asc" ? " ASC" : " DESC";
+    return sortDirection === "asc" ? " ↑" : " ↓";
   }
 
   function sortableHeader(key: SortKey, label: string) {
@@ -414,8 +414,8 @@ export default function AssetsList() {
   return (
     <AppShell
       current="assets"
-      title="Assets"
-      subtitle="Consulta principal de ativos, com criacao, atribuicoes e historico disponiveis na mesma tela."
+      title="Ativos"
+      subtitle="Consulta principal de ativos, com criação, atribuições e histórico disponíveis na mesma tela."
       contentSize="wide"
       actions={
         <div className="flex flex-wrap gap-2">
@@ -480,8 +480,8 @@ export default function AssetsList() {
                   : loading
                     ? "Carregando..."
                     : hasFilters
-                      ? `${filteredAssets.length} de ${assets.length} asset(s)`
-                      : `${assets.length} asset(s)`}
+              ? `${filteredAssets.length} de ${assets.length} ativo(s)`
+                      : `${assets.length} ativo(s)`}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {selectedCount > 0 ? (
@@ -524,7 +524,7 @@ export default function AssetsList() {
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       className="brand-input mt-1.5"
-                      placeholder="Codigo, marca, modelo ou serial"
+                      placeholder="Código, marca, modelo ou serial"
                     />
                   </label>
 
@@ -628,7 +628,7 @@ export default function AssetsList() {
               </div>
             ) : loading ? (
               <div className="px-6 py-10 text-sm [color:var(--text-secondary)]">
-                Buscando assets...
+                Buscando ativos...
               </div>
             ) : assets.length === 0 ? (
               <div className="px-6 py-10 text-sm [color:var(--text-secondary)]">
@@ -661,7 +661,7 @@ export default function AssetsList() {
                             <span>Selecionar todos</span>
                           </label>
                         </th>
-                        <th>{sortableHeader("internalCode", "Codigo")}</th>
+                    <th>{sortableHeader("internalCode", "Código")}</th>
                         <th>{sortableHeader("type", "Tipo")}</th>
                         <th>{sortableHeader("brand", "Marca")}</th>
                         <th>{sortableHeader("model", "Modelo")}</th>
@@ -670,7 +670,7 @@ export default function AssetsList() {
                         <th>{sortableHeader("category", "Categoria")}</th>
                         <th>{sortableHeader("location", "Localização")}</th>
                         <th className="text-right">Valor</th>
-                        <th className="asset-actions-column text-right">Acoes</th>
+                        <th className="asset-actions-column text-right">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -740,7 +740,7 @@ export default function AssetsList() {
                 <div className="flex flex-col gap-4 border-t px-6 py-5 [border-color:var(--border-soft)] lg:flex-row lg:items-center lg:justify-between">
                   <div className="text-sm [color:var(--text-secondary)]">
                     Mostrando {pageStartIndex + 1}-{pageEndIndex} de{" "}
-                    {sortedAssets.length} asset(s)
+                    {sortedAssets.length} ativo(s)
                   </div>
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">

@@ -76,7 +76,7 @@ export default function DeleteEmployeeButton({
 
     try {
       await inactivateEmployee(employee.id, token);
-      toast.success("Funcionario inativado com sucesso.");
+      toast.success("Funcionário inativado com sucesso.");
       onDeleted(employee.id);
       setOpen(false);
     } catch (err: unknown) {
@@ -85,7 +85,7 @@ export default function DeleteEmployeeButton({
       }
 
       const rawMessage =
-        err instanceof Error ? err.message : "Nao foi possivel inativar o funcionario.";
+        err instanceof Error ? err.message : "Não foi possível inativar o funcionário.";
 
       const message = rawMessage.toLowerCase().includes("ativos atribu")
         ? "Funcionário possui ativos atribuídos. Devolva os ativos antes de inativar."
@@ -119,7 +119,7 @@ export default function DeleteEmployeeButton({
               <div className="border-b px-6 py-5 [border-color:var(--border-soft)]">
                 <p className="eyebrow">Confirmacao</p>
                 <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
-                  Inativar funcionario
+                  Inativar funcionário
                 </h2>
               </div>
 

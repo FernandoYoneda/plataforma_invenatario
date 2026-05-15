@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { NavKey } from "./AppNavigation";
 import AppNavigation from "./AppNavigation";
+import { useTheme } from "./ThemeProvider";
 
 type ContentSize = "compact" | "standard" | "wide" | "full";
 
@@ -22,6 +23,7 @@ export default function AppShell({
   children: ReactNode;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -74,6 +76,8 @@ export default function AppShell({
         mobileOpen={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
         onNavigate={() => setMobileNavOpen(false)}
+        theme={theme}
+        onThemeChange={setTheme}
       />
 
       <section className="app-main">

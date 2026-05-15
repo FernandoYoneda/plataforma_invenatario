@@ -128,7 +128,7 @@ export default function AssetHistoryModal({
               </div>
             ) : history.length === 0 ? (
               <div className="surface-soft rounded-[24px] px-4 py-4 text-sm [color:var(--text-secondary)]">
-                Este asset ainda nao possui atribuicoes registradas.
+                Este ativo ainda não possui atribuições registradas.
               </div>
             ) : (
               <div className="space-y-3">
@@ -142,10 +142,10 @@ export default function AssetHistoryModal({
                         <div className="font-medium [color:var(--text-primary)]">
                           {assignment.employee?.name ??
                             assignment.employeeId ??
-                            "Funcionario removido"}
+                            "Funcionário removido"}
                         </div>
                         <div className="mt-1 text-sm [color:var(--text-secondary)]">
-                          {assignment.employee?.email ?? "Funcionario removido"}
+                          {assignment.employee?.email ?? "Funcionário removido"}
                         </div>
                       </div>
                       <div className="status-pill">

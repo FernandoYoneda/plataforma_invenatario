@@ -96,7 +96,7 @@ export class EmployeesService {
         action: 'EMPLOYEE_CREATED',
         entityType: 'Employee',
         entityId: employee.id,
-        description: `Funcionario ${employee.name} criado`,
+        description: `Funcionário ${employee.name} criado`,
         userId,
       });
 
@@ -162,7 +162,7 @@ export class EmployeesService {
         action: 'EMPLOYEE_INACTIVATED',
         entityType: 'Employee',
         entityId: employee.id,
-        description: `Funcionario ${employee.name} inativado`,
+        description: `Funcionário ${employee.name} inativado`,
         userId,
       });
 

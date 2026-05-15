@@ -24,6 +24,17 @@ export class AssignmentsService {
     return trimmed.length > 0 ? trimmed : null;
   }
 
+  private describeAsset(asset: {
+    internalCode: string;
+    brand: string;
+    model?: string | null;
+  }) {
+    const details = [asset.brand, asset.model].filter(Boolean).join(' ');
+    return details
+      ? `Ativo ${asset.internalCode} — ${details}`
+      : `Ativo ${asset.internalCode}`;
+  }
+
   async create(dto: CreateAssignmentDto, userId?: string | null) {
     const asset = await this.prisma.asset.findUnique({
       where: { id: dto.assetId },
@@ -77,7 +88,7 @@ export class AssignmentsService {
       action: 'ASSIGNMENT_CREATED',
       entityType: 'Assignment',
       entityId: assignment.id,
-      description: `Asset ${assignment.asset.internalCode} atribuido para ${assignment.employee?.name ?? assignment.employeeId ?? 'Funcionario removido'}`,
+      description: `${this.describeAsset(assignment.asset)} atribuído para ${assignment.employee?.name ?? assignment.employeeId ?? 'funcionário removido'}`,
       userId,
     });
 
@@ -128,7 +139,7 @@ export class AssignmentsService {
       action: 'ASSIGNMENT_RETURNED',
       entityType: 'Assignment',
       entityId: returnedAssignment.id,
-      description: `Asset ${returnedAssignment.asset.internalCode} devolvido por ${returnedAssignment.employee?.name ?? returnedAssignment.employeeId ?? 'Funcionario removido'}`,
+      description: `${this.describeAsset(returnedAssignment.asset)} devolvido por ${returnedAssignment.employee?.name ?? returnedAssignment.employeeId ?? 'funcionário removido'}`,
       userId,
     });
 
