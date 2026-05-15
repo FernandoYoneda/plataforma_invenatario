@@ -730,6 +730,38 @@ body {
     height: 18rem;
   }
 
+  .print-page {
+    width: 100%;
+    min-height: 100vh;
+    color: var(--text-primary);
+  }
+
+  .print-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    backdrop-filter: blur(12px);
+    background: rgba(247, 242, 235, 0.9);
+  }
+
+  .print-sheet {
+    width: 100%;
+  }
+
+  .print-label {
+    min-height: 10.2rem;
+  }
+
+  .print-qr-frame {
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    max-width: 7rem;
+  }
+
+  .no-print {
+    display: block;
+  }
+
   .data-table-compact th {
     font-size: 0.76rem;
     letter-spacing: 0.08em;
@@ -989,5 +1021,75 @@ body {
 
   .qr-code-frame {
     width: 18rem;
+  }
+}
+
+@page {
+  size: A4 portrait;
+  margin: 8mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  body {
+    color: #173a43;
+  }
+
+  .app-shell,
+  .app-sidebar,
+  .mobile-nav-toggle,
+  .app-sidebar-backdrop,
+  .app-header-actions,
+  .no-print {
+    display: none !important;
+  }
+
+  .print-page {
+    min-height: auto;
+    padding: 0;
+    background: #ffffff !important;
+  }
+
+  .print-sheet {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4mm;
+  }
+
+  .print-label {
+    min-height: 46mm;
+    border: 1px solid rgba(23, 58, 67, 0.14);
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-qr-frame {
+    max-width: 24mm;
+  }
+
+  .print-qr-frame img {
+    width: 100%;
+    height: 100%;
+  }
+
+  .surface-card {
+    box-shadow: none !important;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .status-pill {
+    box-shadow: none !important;
+  }
+
+  .print-toolbar {
+    position: static;
+    background: transparent;
+    padding: 0 0 4mm;
   }
 }

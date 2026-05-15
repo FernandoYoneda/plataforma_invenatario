@@ -4,6 +4,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
+import { AssetStatus } from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
@@ -41,20 +42,35 @@ export class AssignmentsService {
       },
     });
 
+    if (asset.status !== AssetStatus.ESTOQUE) {
+      throw new BadRequestException('Ativo indisponivel para atribuicao');
+    }
+
     if (activeAssignment) {
       throw new BadRequestException('Ativo ja possui atribuicao ativa');
     }
 
-    const assignment = await this.prisma.assignment.create({
-      data: {
-        assetId: dto.assetId,
-        employeeId: dto.employeeId,
-        notes: this.trimToNull(dto.notes),
-      },
-      include: {
-        asset: true,
-        employee: true,
-      },
+    const assignment = await this.prisma.$transaction(async (tx) => {
+      const createdAssignment = await tx.assignment.create({
+        data: {
+          assetId: dto.assetId,
+          employeeId: dto.employeeId,
+          notes: this.trimToNull(dto.notes),
+        },
+        include: {
+          asset: true,
+          employee: true,
+        },
+      });
+
+      await tx.asset.update({
+        where: { id: dto.assetId },
+        data: {
+          status: AssetStatus.EM_USO,
+        },
+      });
+
+      return createdAssignment;
     });
 
     await this.auditLogs?.create({
@@ -85,16 +101,27 @@ export class AssignmentsService {
       throw new BadRequestException('Atribuicao ja foi encerrada');
     }
 
-    const returnedAssignment = await this.prisma.assignment.update({
-      where: { id },
-      data: {
-        returnedAt: new Date(),
-        ...(dto.notes !== undefined && { notes: this.trimToNull(dto.notes) }),
-      },
-      include: {
-        asset: true,
-        employee: true,
-      },
+    const returnedAssignment = await this.prisma.$transaction(async (tx) => {
+      const updatedAssignment = await tx.assignment.update({
+        where: { id },
+        data: {
+          returnedAt: new Date(),
+          ...(dto.notes !== undefined && { notes: this.trimToNull(dto.notes) }),
+        },
+        include: {
+          asset: true,
+          employee: true,
+        },
+      });
+
+      await tx.asset.update({
+        where: { id: updatedAssignment.assetId },
+        data: {
+          status: AssetStatus.ESTOQUE,
+        },
+      });
+
+      return updatedAssignment;
     });
 
     await this.auditLogs?.create({

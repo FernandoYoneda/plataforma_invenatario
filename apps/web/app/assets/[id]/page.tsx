@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ApiError, getAsset, getAssetHistory, getCurrentUser } from "@/lib/api";
+import { ApiError, getAssetDetails, getCurrentUser } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
-import type { Asset, Assignment } from "@/lib/types";
+import type { Asset, AssetDetails } from "@/lib/types";
 import AppShell from "../../../components/AppShell";
 import AssetAttachmentsPanel from "../../../components/AssetAttachmentsPanel";
 import AssetQrCodeModal, {
@@ -34,8 +34,20 @@ function formatDate(value?: string | null) {
   return new Date(value).toLocaleString("pt-BR");
 }
 
+function formatMoney(valueCents?: number | null) {
+  if (valueCents == null) return "-";
+  return (valueCents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
 function fieldValue(value?: string | null) {
   return value && value.trim().length > 0 ? value : "-";
+}
+
+function auditActionLabel(action: string) {
+  return action.replaceAll("_", " ");
 }
 
 function DetailItem({
@@ -62,8 +74,7 @@ export default function AssetDetailsPage() {
   const router = useRouter();
   const assetId = params.id;
 
-  const [asset, setAsset] = useState<Asset | null>(null);
-  const [history, setHistory] = useState<Assignment[]>([]);
+  const [details, setDetails] = useState<AssetDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
@@ -98,15 +109,13 @@ export default function AssetDetailsPage() {
       setError(null);
 
       try {
-        const [assetData, historyData, userData] = await Promise.all([
-          getAsset(assetId, token),
-          getAssetHistory(assetId, token),
+        const [detailsData, userData] = await Promise.all([
+          getAssetDetails(assetId, token),
           getCurrentUser(token),
         ]);
 
         if (!active) return;
-        setAsset(assetData);
-        setHistory(historyData);
+        setDetails(detailsData);
         setIsAdmin(userData.role === "ADMIN");
       } catch (err: unknown) {
         if (!active) return;
@@ -118,8 +127,7 @@ export default function AssetDetailsPage() {
 
         if (err instanceof ApiError && err.status === 404) {
           setError("Ativo nao encontrado.");
-          setAsset(null);
-          setHistory([]);
+          setDetails(null);
           return;
         }
 
@@ -128,8 +136,7 @@ export default function AssetDetailsPage() {
             ? err.message
             : "Nao foi possivel carregar este ativo.",
         );
-        setAsset(null);
-        setHistory([]);
+        setDetails(null);
       } finally {
         if (active) {
           setLoading(false);
@@ -144,6 +151,11 @@ export default function AssetDetailsPage() {
     };
   }, [assetId, handleUnauthorized]);
 
+  const asset = details?.asset ?? null;
+  const history = details?.history ?? [];
+  const currentAssignment = details?.currentAssignment ?? null;
+  const auditLogs = details?.auditLogs ?? [];
+  const currentEmployee = currentAssignment?.employee ?? null;
   const title = useMemo(() => (asset ? assetQrTitle(asset) : ""), [asset]);
 
   async function handlePrintQr() {
@@ -170,6 +182,9 @@ export default function AssetDetailsPage() {
       <Link href="/assets" className="btn-secondary px-4 py-2.5 text-sm">
         Voltar para Assets
       </Link>
+      <Link href="/dashboard" className="btn-secondary px-4 py-2.5 text-sm">
+        Dashboard
+      </Link>
 
       {asset ? (
         <>
@@ -195,7 +210,7 @@ export default function AssetDetailsPage() {
       subtitle={
         asset
           ? title || "Consulta detalhada do ativo"
-          : "Consulta detalhada do ativo e historico de movimentacoes."
+          : "Consulta detalhada do ativo, seu historico e sua auditoria."
       }
       contentSize="standard"
       actions={actions}
@@ -246,15 +261,13 @@ export default function AssetDetailsPage() {
               <DetailItem label="Marca" value={asset.brand} />
               <DetailItem label="Modelo" value={fieldValue(asset.model)} />
               <DetailItem label="Serial" value={fieldValue(asset.serialNumber)} />
-              <DetailItem label="Status" value={STATUS_LABELS[asset.status]} />
+              <DetailItem label="Categoria" value={fieldValue(asset.category?.name)} />
               <DetailItem
-                label="Categoria"
-                value={fieldValue(asset.category?.name)}
-              />
-              <DetailItem
-                label="Localização"
+                label="LocalizaÃ§Ã£o"
                 value={fieldValue(asset.location?.name)}
               />
+              <DetailItem label="Status" value={STATUS_LABELS[asset.status]} />
+              <DetailItem label="Valor" value={formatMoney(asset.valueCents)} />
               <DetailItem
                 label="Criado em"
                 value={formatDate(asset.createdAt ?? asset.registeredAt)}
@@ -272,6 +285,53 @@ export default function AssetDetailsPage() {
               <p className="mt-2 whitespace-pre-wrap text-sm [color:var(--text-secondary)]">
                 {fieldValue(asset.notes)}
               </p>
+            </div>
+          </section>
+
+          <section className="glass-panel overflow-hidden rounded-[30px]">
+            <div className="border-b px-6 py-5 [border-color:var(--border-soft)]">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="eyebrow">Vinculo atual</p>
+                  <h2 className="mt-2 text-xl font-semibold [color:var(--text-primary)]">
+                    Funcionário atual
+                  </h2>
+                </div>
+                <div className="status-pill">
+                  {currentEmployee ? "Ativo" : "Sem atribuicao"}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-6">
+              {currentEmployee ? (
+                <div className="surface-soft rounded-[24px] px-4 py-4">
+                  <div className="font-semibold [color:var(--text-primary)]">
+                    {currentEmployee.name}
+                  </div>
+                  <div className="mt-1 text-sm [color:var(--text-secondary)]">
+                    {currentEmployee.email}
+                  </div>
+                  <div className="mt-3 grid gap-3 text-sm [color:var(--text-secondary)] sm:grid-cols-2">
+                    <div>
+                      <span className="font-semibold [color:var(--text-primary)]">
+                        Atribuido em:
+                      </span>{" "}
+                      {formatDate(currentAssignment?.assignedAt)}
+                    </div>
+                    <div>
+                      <span className="font-semibold [color:var(--text-primary)]">
+                        Observacoes:
+                      </span>{" "}
+                      {fieldValue(currentAssignment?.notes)}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="surface-soft rounded-[24px] px-4 py-4 text-sm [color:var(--text-secondary)]">
+                  Este ativo nao possui funcionario vinculado no momento.
+                </div>
+              )}
             </div>
           </section>
 
@@ -342,6 +402,58 @@ export default function AssetDetailsPage() {
                           Observacoes:
                         </span>{" "}
                         {fieldValue(assignment.notes)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="glass-panel overflow-hidden rounded-[30px]">
+            <div className="border-b px-6 py-5 [border-color:var(--border-soft)]">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="eyebrow">Auditoria</p>
+                  <h2 className="mt-2 text-xl font-semibold [color:var(--text-primary)]">
+                    Movimentacoes relacionadas
+                  </h2>
+                </div>
+                <div className="status-pill">{auditLogs.length} registro(s)</div>
+              </div>
+            </div>
+
+            <div className="px-6 py-6">
+              {auditLogs.length === 0 ? (
+                <div className="surface-soft rounded-[24px] px-4 py-4 text-sm [color:var(--text-secondary)]">
+                  Nenhum registro de auditoria relacionado a este ativo.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {auditLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="surface-soft rounded-[24px] px-4 py-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="font-semibold [color:var(--text-primary)]">
+                            {auditActionLabel(log.action)}
+                          </div>
+                          <div className="mt-1 text-sm [color:var(--text-secondary)]">
+                            {log.description}
+                          </div>
+                        </div>
+                        <div className="status-pill">
+                          {formatDate(log.createdAt)}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 text-sm [color:var(--text-secondary)]">
+                        <span className="font-semibold [color:var(--text-primary)]">
+                          Usuario:
+                        </span>{" "}
+                        {log.user?.name ?? "Sistema"}
                       </div>
                     </div>
                   ))}

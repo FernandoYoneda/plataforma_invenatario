@@ -147,6 +147,27 @@ export type AuditLog = {
   } | null;
 };
 
+export type AssetDetails = {
+  asset: Asset;
+  currentAssignment: Assignment | null;
+  history: Assignment[];
+  auditLogs: AuditLog[];
+};
+
+export type AssetImportError = {
+  rowNumber: number;
+  code?: string | null;
+  message: string;
+};
+
+export type AssetImportResult = {
+  totalRows: number;
+  importedCount: number;
+  ignoredCount: number;
+  errors: AssetImportError[];
+  imported: Asset[];
+};
+
 export type AuthUser = {
   id: string;
   name: string;

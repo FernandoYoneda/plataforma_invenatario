@@ -1,28 +1,66 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
-import { clearAuthToken, getAuthToken } from "@/lib/auth";
-import { getEmployeeAssignments } from "@/lib/api";
-import type { Assignment, Employee } from "@/lib/types";
+import { toast } from "sonner";
+import {
+  createAssignment,
+  getActiveAssignments,
+  getAssets,
+  getEmployeeAssignments,
+  returnAssignment,
+} from "@/lib/api";
+import { getAuthToken } from "@/lib/auth";
+import type { Asset, Assignment, Employee } from "@/lib/types";
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
   return new Date(value).toLocaleString("pt-BR");
 }
 
+function assetTitle(asset?: Asset | null) {
+  if (!asset) return "-";
+  return [asset.internalCode, asset.brand, asset.model]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function EmployeeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
+      <path d="M4 21a8 8 0 1 1 16 0" />
+    </svg>
+  );
+}
+
+type FilterState = {
+  search: string;
+  categoryId: string;
+  locationId: string;
+};
+
 export default function EmployeeAssignmentsModal({
   employee,
 }: {
   employee: Employee;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [activeAssignments, setActiveAssignments] = useState<Assignment[]>([]);
+  const [assignPanelOpen, setAssignPanelOpen] = useState(false);
+  const [selectedAssetId, setSelectedAssetId] = useState("");
+  const [assignmentNotes, setAssignmentNotes] = useState("");
+  const [filters, setFilters] = useState<FilterState>({
+    search: "",
+    categoryId: "",
+    locationId: "",
+  });
 
   function handleAuthError(err: unknown) {
     if (
@@ -31,8 +69,7 @@ export default function EmployeeAssignmentsModal({
       typeof err.status === "number" &&
       err.status === 401
     ) {
-      clearAuthToken();
-      router.replace("/login");
+      toast.error("Sessao expirada. Faca login novamente.");
       return true;
     }
 
@@ -57,13 +94,12 @@ export default function EmployeeAssignmentsModal({
 
     let active = true;
 
-    async function loadAssignments() {
+    async function loadData() {
       const token = getAuthToken();
 
       if (!token) {
         if (!active) return;
-        clearAuthToken();
-        router.replace("/login");
+        setError("Sessao expirada. Faca login novamente.");
         return;
       }
 
@@ -71,11 +107,18 @@ export default function EmployeeAssignmentsModal({
       setError(null);
 
       try {
-        const data = await getEmployeeAssignments(employee.id, token);
+        const [employeeAssignments, allAssets, activeAssignmentsData] =
+          await Promise.all([
+            getEmployeeAssignments(employee.id, token),
+            getAssets(token),
+            getActiveAssignments(token),
+          ]);
 
         if (!active) return;
 
-        setAssignments(data);
+        setAssignments(employeeAssignments);
+        setAssets(allAssets);
+        setActiveAssignments(activeAssignmentsData);
       } catch (err: unknown) {
         if (!active) return;
 
@@ -86,10 +129,12 @@ export default function EmployeeAssignmentsModal({
         const message =
           err instanceof Error
             ? err.message
-            : "Nao foi possivel carregar os ativos do funcionario.";
+            : "Nao foi possivel carregar os dados do funcionario.";
 
         setError(message);
         setAssignments([]);
+        setAssets([]);
+        setActiveAssignments([]);
       } finally {
         if (active) {
           setLoading(false);
@@ -97,28 +142,200 @@ export default function EmployeeAssignmentsModal({
       }
     }
 
-    loadAssignments();
+    loadData();
 
     return () => {
       active = false;
     };
-  }, [employee.id, open, router]);
+  }, [employee.id, open]);
 
-  const activeAssignments = assignments.filter((assignment) => !assignment.returnedAt);
-  const historyAssignments = assignments.filter((assignment) => assignment.returnedAt);
+  const activeEmployeeAssignments = useMemo(
+    () => assignments.filter((assignment) => !assignment.returnedAt),
+    [assignments],
+  );
+  const historyAssignments = useMemo(
+    () => assignments.filter((assignment) => Boolean(assignment.returnedAt)),
+    [assignments],
+  );
+
+  const activeAssetIds = useMemo(
+    () => new Set(activeAssignments.map((assignment) => assignment.assetId)),
+    [activeAssignments],
+  );
+
+  const availableAssets = useMemo(() => {
+    const normalizedSearch = filters.search.trim().toLowerCase();
+
+    return assets.filter((asset) => {
+      const isStock = asset.status === "ESTOQUE";
+      const isFree = !activeAssetIds.has(asset.id);
+      const matchesSearch =
+        !normalizedSearch ||
+        [
+          asset.internalCode,
+          asset.brand,
+          asset.model ?? "",
+          asset.serialNumber ?? "",
+        ].some((value) => value.toLowerCase().includes(normalizedSearch));
+      const matchesCategory =
+        !filters.categoryId || (asset.category?.id ?? "") === filters.categoryId;
+      const matchesLocation =
+        !filters.locationId || (asset.location?.id ?? "") === filters.locationId;
+
+      return (
+        isStock &&
+        isFree &&
+        matchesSearch &&
+        matchesCategory &&
+        matchesLocation
+      );
+    });
+  }, [activeAssetIds, assets, filters]);
+
+  const categoryOptions = useMemo(() => {
+    return Array.from(
+      new Map(
+        assets
+          .map((asset) => asset.category)
+          .filter((value): value is NonNullable<Asset["category"]> => Boolean(value))
+          .map((item) => [item.id, item]),
+      ).values(),
+    ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [assets]);
+
+  const locationOptions = useMemo(() => {
+    return Array.from(
+      new Map(
+        assets
+          .map((asset) => asset.location)
+          .filter((value): value is NonNullable<Asset["location"]> => Boolean(value))
+          .map((item) => [item.id, item]),
+      ).values(),
+    ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [assets]);
+
+  function close() {
+    if (!loading && !actionLoadingId) {
+      setOpen(false);
+      setAssignPanelOpen(false);
+      setSelectedAssetId("");
+      setAssignmentNotes("");
+      setFilters({
+        search: "",
+        categoryId: "",
+        locationId: "",
+      });
+    }
+  }
+
+  function resetAssignForm() {
+    setSelectedAssetId("");
+    setAssignmentNotes("");
+  }
+
+  async function reloadData() {
+    const token = getAuthToken();
+    if (!token) {
+      toast.error("Sessao expirada. Faca login novamente.");
+      return;
+    }
+
+    const [employeeAssignments, allAssets, activeAssignmentsData] =
+      await Promise.all([
+        getEmployeeAssignments(employee.id, token),
+        getAssets(token),
+        getActiveAssignments(token),
+      ]);
+
+    setAssignments(employeeAssignments);
+    setAssets(allAssets);
+    setActiveAssignments(activeAssignmentsData);
+  }
+
+  async function handleAssign(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedAssetId) {
+      toast.error("Selecione um ativo para atribuir.");
+      return;
+    }
+
+    const token = getAuthToken();
+    if (!token) {
+      toast.error("Sessao expirada. Faca login novamente.");
+      return;
+    }
+
+    setActionLoadingId(selectedAssetId);
+    setError(null);
+
+    try {
+      await createAssignment(
+        {
+          assetId: selectedAssetId,
+          employeeId: employee.id,
+          notes: assignmentNotes.trim() || null,
+        },
+        token,
+      );
+
+      toast.success("Ativo atribuido com sucesso.");
+      resetAssignForm();
+      await reloadData();
+    } catch (err: unknown) {
+      if (handleAuthError(err)) {
+        return;
+      }
+
+      const message =
+        err instanceof Error ? err.message : "Nao foi possivel atribuir o ativo.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleReturn(assignmentId: string) {
+    const token = getAuthToken();
+    if (!token) {
+      toast.error("Sessao expirada. Faca login novamente.");
+      return;
+    }
+
+    setActionLoadingId(assignmentId);
+    setError(null);
+
+    try {
+      await returnAssignment(assignmentId, {}, token);
+      toast.success("Ativo devolvido com sucesso.");
+      await reloadData();
+    } catch (err: unknown) {
+      if (handleAuthError(err)) {
+        return;
+      }
+
+      const message =
+        err instanceof Error ? err.message : "Nao foi possivel devolver o ativo.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
 
   const modal = (
-    <div className="fixed inset-0 z-[99999]" onClick={() => setOpen(false)}>
+    <div className="fixed inset-0 z-[99999]" onClick={close}>
       <div className="absolute inset-0 bg-[rgba(23,58,67,0.66)] backdrop-blur-[3px]" />
 
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
-          className="glass-panel w-full max-w-4xl overflow-hidden rounded-[30px]"
+          className="glass-panel w-full max-w-6xl overflow-hidden rounded-[30px]"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex items-center justify-between border-b px-6 py-5 [border-color:var(--border-soft)]">
+          <div className="flex flex-col gap-3 border-b px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="eyebrow">Ativos</p>
+              <p className="eyebrow">Funcionário</p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
                 {employee.name}
               </h2>
@@ -127,16 +344,26 @@ export default function EmployeeAssignmentsModal({
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="btn-secondary px-3 py-2 text-sm"
-            >
-              Fechar
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setAssignPanelOpen((current) => !current)}
+                className="btn-primary px-4 py-2.5 text-sm"
+              >
+                {assignPanelOpen ? "Fechar atribuicao" : "Atribuir ativo"}
+              </button>
+
+              <button
+                type="button"
+                onClick={close}
+                className="btn-secondary px-3 py-2 text-sm"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
 
-          <div className="max-h-[72vh] overflow-auto px-6 py-5">
+          <div className="max-h-[78vh] overflow-auto px-6 py-5">
             {error ? (
               <div className="status-banner-error rounded-[22px] px-4 py-3 text-sm">
                 {error}
@@ -149,13 +376,187 @@ export default function EmployeeAssignmentsModal({
               <div className="space-y-5">
                 <div className="flex flex-wrap gap-2">
                   <div className="status-pill">
-                    {activeAssignments.length} ativo(s)
+                    {activeEmployeeAssignments.length} ativo(s)
                   </div>
                   <div className="status-pill">
                     {historyAssignments.length} no historico
                   </div>
-                  <div className="status-pill">{assignments.length} total</div>
+                  <div className="status-pill">
+                    {availableAssets.length} disponivel(is)
+                  </div>
                 </div>
+
+                {assignPanelOpen ? (
+                  <section className="surface-soft rounded-[24px] p-4">
+                    <div className="flex flex-col gap-3 border-b pb-4 [border-color:var(--border-soft)] sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold [color:var(--text-primary)]">
+                          Atribuir ativo
+                        </h3>
+                        <p className="mt-1 text-xs [color:var(--text-secondary)]">
+                          Mostrando apenas ativos em estoque e sem atribuicao ativa.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <label className="block text-sm">
+                          <span className="sr-only">Buscar</span>
+                          <input
+                            value={filters.search}
+                            onChange={(event) =>
+                              setFilters((current) => ({
+                                ...current,
+                                search: event.target.value,
+                              }))
+                            }
+                            className="brand-input min-w-56"
+                            placeholder="Codigo, marca, modelo ou serial"
+                          />
+                        </label>
+
+                        <select
+                          value={filters.categoryId}
+                          onChange={(event) =>
+                            setFilters((current) => ({
+                              ...current,
+                              categoryId: event.target.value,
+                            }))
+                          }
+                          className="brand-input min-w-44"
+                        >
+                          <option value="">Todas as categorias</option>
+                          {categoryOptions.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={filters.locationId}
+                          onChange={(event) =>
+                            setFilters((current) => ({
+                              ...current,
+                              locationId: event.target.value,
+                            }))
+                          }
+                          className="brand-input min-w-44"
+                        >
+                          <option value="">Todas as localizacoes</option>
+                          {locationOptions.map((location) => (
+                            <option key={location.id} value={location.id}>
+                              {location.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleAssign}>
+                      <div className="mt-4 overflow-auto">
+                        {availableAssets.length === 0 ? (
+                          <div className="text-sm [color:var(--text-secondary)]">
+                            Nenhum ativo disponivel para atribuicao.
+                          </div>
+                        ) : (
+                          <table className="data-table data-table-compact">
+                            <thead>
+                              <tr>
+                                <th></th>
+                                <th>Codigo</th>
+                                <th>Marca</th>
+                                <th>Modelo</th>
+                                <th>Serial</th>
+                                <th>Categoria</th>
+                                <th>Localizacao</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {availableAssets.map((asset) => (
+                                <tr
+                                  key={asset.id}
+                                  className={
+                                    selectedAssetId === asset.id
+                                      ? "bg-[rgba(31,75,85,0.06)]"
+                                      : ""
+                                  }
+                                >
+                                  <td>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedAssetId(asset.id)}
+                                      className="btn-secondary px-3 py-2 text-xs"
+                                    >
+                                      {selectedAssetId === asset.id
+                                        ? "Selecionado"
+                                        : "Selecionar"}
+                                    </button>
+                                  </td>
+                                  <td className="cell-strong">{asset.internalCode}</td>
+                                  <td>{asset.brand}</td>
+                                  <td>{asset.model ?? "-"}</td>
+                                  <td>{asset.serialNumber ?? "-"}</td>
+                                  <td>{asset.category?.name ?? "-"}</td>
+                                  <td>{asset.location?.name ?? "-"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+
+                      {selectedAssetId ? (
+                        <div className="mt-4 surface-soft rounded-[24px] px-4 py-4">
+                          <div className="font-semibold [color:var(--text-primary)]">
+                            {assetTitle(
+                              availableAssets.find((asset) => asset.id === selectedAssetId),
+                            )}
+                          </div>
+                          <div className="mt-2 text-sm [color:var(--text-secondary)]">
+                            {availableAssets.find((asset) => asset.id === selectedAssetId)
+                              ?.category?.name ?? "Sem categoria"}{" "}
+                            |{" "}
+                            {availableAssets.find((asset) => asset.id === selectedAssetId)
+                              ?.location?.name ?? "Sem localizacao"}
+                          </div>
+
+                          <label className="mt-4 block text-sm">
+                            <span className="font-medium [color:var(--text-primary)]">
+                              Observacoes
+                            </span>
+                            <textarea
+                              value={assignmentNotes}
+                              onChange={(event) => setAssignmentNotes(event.target.value)}
+                              rows={3}
+                              className="brand-input mt-1.5"
+                              placeholder="Observacoes opcionais da atribuicao."
+                            />
+                          </label>
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <button
+                              type="submit"
+                              disabled={Boolean(actionLoadingId)}
+                              className="btn-primary px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              {actionLoadingId === selectedAssetId
+                                ? "Atribuindo..."
+                                : "Confirmar atribuicao"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={resetAssignForm}
+                              className="btn-secondary px-4 py-3 text-sm"
+                            >
+                              Limpar selecao
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </form>
+                  </section>
+                ) : null}
 
                 <section className="surface-soft rounded-[24px] p-4">
                   <div className="mb-4 flex items-center justify-between gap-3">
@@ -163,17 +564,17 @@ export default function EmployeeAssignmentsModal({
                       Ativos atuais
                     </h3>
                     <span className="text-xs [color:var(--text-secondary)]">
-                      Apenas atribuicoes em aberto
+                      Atribuicoes em aberto
                     </span>
                   </div>
 
-                  {activeAssignments.length === 0 ? (
+                  {activeEmployeeAssignments.length === 0 ? (
                     <div className="text-sm [color:var(--text-secondary)]">
                       Nenhum ativo atribuido no momento.
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {activeAssignments.map((assignment) => (
+                      {activeEmployeeAssignments.map((assignment) => (
                         <article
                           key={assignment.id}
                           className="rounded-[20px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.76)] p-4"
@@ -181,10 +582,11 @@ export default function EmployeeAssignmentsModal({
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <div className="font-medium [color:var(--text-primary)]">
-                                {assignment.asset?.internalCode ?? assignment.assetId}
+                                {assetTitle(assignment.asset)}
                               </div>
                               <div className="mt-1 text-sm [color:var(--text-secondary)]">
-                                {assignment.asset?.brand ?? "Ativo"}
+                                {assignment.asset?.category?.name ?? "Sem categoria"}{" "}
+                                | {assignment.asset?.location?.name ?? "Sem localizacao"}
                               </div>
                             </div>
                             <div className="status-pill">Ativo</div>
@@ -197,6 +599,19 @@ export default function EmployeeAssignmentsModal({
 
                           <div className="mt-3 text-sm [color:var(--text-secondary)]">
                             Observacoes: {assignment.notes ?? "-"}
+                          </div>
+
+                          <div className="mt-4">
+                            <button
+                              type="button"
+                              onClick={() => handleReturn(assignment.id)}
+                              disabled={actionLoadingId === assignment.id}
+                              className="btn-danger px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {actionLoadingId === assignment.id
+                                ? "Devolvendo..."
+                                : "Devolver"}
+                            </button>
                           </div>
                         </article>
                       ))}
@@ -228,10 +643,11 @@ export default function EmployeeAssignmentsModal({
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <div className="font-medium [color:var(--text-primary)]">
-                                {assignment.asset?.internalCode ?? assignment.assetId}
+                                {assetTitle(assignment.asset)}
                               </div>
                               <div className="mt-1 text-sm [color:var(--text-secondary)]">
-                                {assignment.asset?.brand ?? "Ativo"}
+                                {assignment.asset?.category?.name ?? "Sem categoria"}{" "}
+                                | {assignment.asset?.location?.name ?? "Sem localizacao"}
                               </div>
                             </div>
                             <div className="status-pill">Encerrado</div>
@@ -261,6 +677,7 @@ export default function EmployeeAssignmentsModal({
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="action-button">
+        <EmployeeIcon />
         Ver ativos
       </button>
 

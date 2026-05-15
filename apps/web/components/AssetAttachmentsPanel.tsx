@@ -300,12 +300,15 @@ export default function AssetAttachmentsPanel({
                   className="brand-input mt-1.5"
                   disabled={uploading}
                 />
+                <span className="mt-2 block text-xs [color:var(--text-secondary)]">
+                  {selectedFile ? `Arquivo selecionado: ${selectedFile.name}` : "Nenhum arquivo selecionado."}
+                </span>
               </label>
 
               <button
                 type="button"
                 onClick={handleUpload}
-                disabled={uploading || !selectedFile || Boolean(uploadError)}
+                disabled={uploading || !selectedFile}
                 className="btn-primary px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {uploading ? "Enviando..." : "Anexar arquivo"}

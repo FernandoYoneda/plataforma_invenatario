@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  getActiveAssignments,
   getAssets,
   getCategories,
   getLocations,
@@ -14,15 +13,14 @@ import type {
   Asset,
   AssetStatus,
   AssetType,
-  Assignment,
   Category,
   Location,
 } from "@/lib/types";
-import ActiveAssignmentsPanel from "./ActiveAssignmentsPanel";
 import AppShell from "./AppShell";
 import AssignAssetModal from "./AssignAssetModal";
 import AssetHistoryModal from "./AssetHistoryModal";
 import AssetQrCodeModal from "./AssetQrCodeModal";
+import ImportAssetsModal from "./ImportAssetsModal";
 import EditAssetModal from "./EditAssetModal";
 import NewAssetModal from "./NewAssetModal";
 
@@ -119,9 +117,6 @@ export default function AssetsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
-  const [activeAssignments, setActiveAssignments] = useState<Assignment[]>([]);
-  const [loadingAssignments, setLoadingAssignments] = useState(true);
-  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [categories, setCategories] = useState<Category[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -135,6 +130,7 @@ export default function AssetsList() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const locationIdFromQuery = searchParams.get("locationId") ?? "";
   const queryLocationName =
     locations.find((item) => item.id === locationIdFromQuery)?.name ?? "";
@@ -180,33 +176,6 @@ export default function AssetsList() {
     }
   }
 
-  async function loadActiveAssignments() {
-    const token = getAuthToken();
-
-    if (!token) {
-      setRedirecting(true);
-      setLoadingAssignments(false);
-      router.replace("/login");
-      return;
-    }
-
-    try {
-      const data = await getActiveAssignments(token);
-      setActiveAssignments(data);
-      setAssignmentsError(null);
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Nao foi possivel carregar os assignments ativos.";
-
-      handleAuthError(err);
-      setAssignmentsError(message);
-    } finally {
-      setLoadingAssignments(false);
-    }
-  }
-
   async function loadReferences() {
     const token = getAuthToken();
 
@@ -238,7 +207,7 @@ export default function AssetsList() {
 
   useEffect(() => {
     async function load() {
-      await Promise.all([loadAssets(), loadActiveAssignments(), loadReferences()]);
+      await Promise.all([loadAssets(), loadReferences()]);
     }
 
     load();
@@ -306,12 +275,54 @@ export default function AssetsList() {
   const pageStartIndex = (currentPage - 1) * pageSize;
   const pageEndIndex = Math.min(pageStartIndex + pageSize, sortedAssets.length);
   const paginatedAssets = sortedAssets.slice(pageStartIndex, pageEndIndex);
+  const selectedAssetSet = useMemo(
+    () => new Set(selectedAssetIds),
+    [selectedAssetIds],
+  );
+  const selectedCount = selectedAssetIds.length;
+  const visibleSelectedCount = paginatedAssets.filter((asset) =>
+    selectedAssetSet.has(asset.id),
+  ).length;
+  const allVisibleSelected =
+    paginatedAssets.length > 0 && visibleSelectedCount === paginatedAssets.length;
+  const someVisibleSelected =
+    visibleSelectedCount > 0 && visibleSelectedCount < paginatedAssets.length;
+  const printLabelsHref = useMemo(() => {
+    if (selectedAssetIds.length === 0) {
+      return "/assets/print-labels";
+    }
+
+    const params = new URLSearchParams();
+    params.set("ids", selectedAssetIds.join(","));
+    return `/assets/print-labels?${params.toString()}`;
+  }, [selectedAssetIds]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
     }
   }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    setSelectedAssetIds((current) => {
+      if (current.length === 0) {
+        return current;
+      }
+
+      const next = current.filter((assetId) =>
+        filteredAssets.some((asset) => asset.id === assetId),
+      );
+
+      if (
+        next.length === current.length &&
+        next.every((assetId, index) => assetId === current[index])
+      ) {
+        return current;
+      }
+
+      return next;
+    });
+  }, [filteredAssets]);
 
   const hasFilters = Boolean(
     search.trim() ||
@@ -333,6 +344,38 @@ export default function AssetsList() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("locationId");
     router.replace(params.toString() ? `/assets?${params.toString()}` : "/assets");
+  }
+
+  function toggleAssetSelection(assetId: string) {
+    setSelectedAssetIds((current) =>
+      current.includes(assetId)
+        ? current.filter((item) => item !== assetId)
+        : [...current, assetId],
+    );
+  }
+
+  function toggleCurrentPageSelection() {
+    setSelectedAssetIds((current) => {
+      const currentSet = new Set(current);
+
+      if (allVisibleSelected) {
+        return current.filter((assetId) => !paginatedAssets.some((asset) => asset.id === assetId));
+      }
+
+      const next = [...current];
+
+      for (const asset of paginatedAssets) {
+        if (!currentSet.has(asset.id)) {
+          next.push(asset.id);
+        }
+      }
+
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedAssetIds([]);
   }
 
   function handleSort(nextKey: SortKey) {
@@ -375,12 +418,31 @@ export default function AssetsList() {
       subtitle="Consulta principal de ativos, com criacao, atribuicoes e historico disponiveis na mesma tela."
       contentSize="wide"
       actions={
-        <NewAssetModal
-          onCreated={(asset) => {
-            setAssets((current) => [asset, ...current]);
-            setError(null);
-          }}
-        />
+        <div className="flex flex-wrap gap-2">
+          <NewAssetModal
+            onCreated={(asset) => {
+              setAssets((current) => [asset, ...current]);
+              setError(null);
+            }}
+          />
+          <ImportAssetsModal
+            assets={assets}
+            categories={categories}
+            locations={locations}
+            onImported={(imported) => {
+              setAssets((current) => {
+                const importedIds = new Set(imported.map((asset) => asset.id));
+                return [
+                  ...imported,
+                  ...current.filter((asset) => !importedIds.has(asset.id)),
+                ];
+              });
+              setError(null);
+              setCurrentPage(1);
+              setHistoryRefreshKey((current) => current + imported.length);
+            }}
+          />
+        </div>
       }
     >
           {locationIdFromQuery ? (
@@ -408,19 +470,7 @@ export default function AssetsList() {
                 </Link>
               </div>
             </section>
-          ) : null}
-
-          <ActiveAssignmentsPanel
-            assignments={activeAssignments}
-            loading={loadingAssignments}
-            error={assignmentsError}
-            onReturned={(assignmentId) => {
-              setActiveAssignments((current) =>
-                current.filter((item) => item.id !== assignmentId),
-              );
-              setHistoryRefreshKey((current) => current + 1);
-            }}
-          />
+            ) : null}
 
           <section className="overflow-hidden rounded-[30px] border [border-color:var(--border-soft)] bg-[rgba(255,255,255,0.72)] shadow-[0_18px_50px_rgba(23,58,67,0.08)] backdrop-blur">
             <div className="flex flex-col gap-3 border-b px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-center sm:justify-between">
@@ -433,12 +483,34 @@ export default function AssetsList() {
                       ? `${filteredAssets.length} de ${assets.length} asset(s)`
                       : `${assets.length} asset(s)`}
               </div>
-              <Link
-                href="/login"
-                className="text-sm font-medium [color:var(--brand-teal-700)] underline-offset-4 hover:underline"
-              >
-                Ir para login
-              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedCount > 0 ? (
+                  <>
+                    <span className="status-pill">
+                      {selectedCount} selecionado(s)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={clearSelection}
+                      className="btn-secondary px-4 py-2.5 text-sm"
+                    >
+                      Limpar selecao
+                    </button>
+                    <Link
+                      href={printLabelsHref}
+                      className="btn-primary px-4 py-2.5 text-sm"
+                    >
+                      Imprimir etiquetas
+                    </Link>
+                  </>
+                ) : null}
+                <Link
+                  href="/login"
+                  className="text-sm font-medium [color:var(--brand-teal-700)] underline-offset-4 hover:underline"
+                >
+                  Ir para login
+                </Link>
+              </div>
             </div>
 
             {!redirecting && !error && !loading ? (
@@ -572,6 +644,23 @@ export default function AssetsList() {
                   <table className="data-table data-table-compact">
                     <thead>
                       <tr>
+                        <th className="w-14">
+                          <label className="inline-flex items-center gap-2 whitespace-nowrap text-[0.72rem] font-semibold uppercase tracking-[0.08em] [color:var(--text-muted)]">
+                            <input
+                              ref={(input) => {
+                                if (input) {
+                                  input.indeterminate = someVisibleSelected;
+                                }
+                              }}
+                              type="checkbox"
+                              checked={allVisibleSelected}
+                              onChange={toggleCurrentPageSelection}
+                              aria-label="Selecionar todos os ativos da pagina atual"
+                              className="h-4 w-4 rounded border-[color:var(--border-strong)] accent-[color:var(--brand-teal-700)]"
+                            />
+                            <span>Selecionar todos</span>
+                          </label>
+                        </th>
                         <th>{sortableHeader("internalCode", "Codigo")}</th>
                         <th>{sortableHeader("type", "Tipo")}</th>
                         <th>{sortableHeader("brand", "Marca")}</th>
@@ -587,6 +676,15 @@ export default function AssetsList() {
                     <tbody>
                       {paginatedAssets.map((asset) => (
                         <tr key={asset.id}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={selectedAssetSet.has(asset.id)}
+                              onChange={() => toggleAssetSelection(asset.id)}
+                              aria-label={`Selecionar ativo ${asset.internalCode}`}
+                              className="h-4 w-4 rounded border-[color:var(--border-strong)] accent-[color:var(--brand-teal-700)]"
+                            />
+                          </td>
                           <td className="cell-strong">{asset.internalCode}</td>
                           <td>{labelType(asset.type)}</td>
                           <td>{asset.brand}</td>
@@ -598,19 +696,12 @@ export default function AssetsList() {
                           <td className="text-right">{moneyBRL(asset.valueCents)}</td>
                           <td className="asset-actions-column">
                             <div className="asset-actions-row">
-                              <AssignAssetModal
-                                asset={asset}
-                                onAssigned={(assignment) => {
-                                  setActiveAssignments((current) => [
-                                    assignment,
-                                    ...current.filter(
-                                      (item) =>
-                                        item.assetId !== assignment.assetId,
-                                    ),
-                                  ]);
-                                  setHistoryRefreshKey((current) => current + 1);
-                                }}
-                              />
+                          <AssignAssetModal
+                            asset={asset}
+                            onAssigned={() => {
+                              setHistoryRefreshKey((current) => current + 1);
+                            }}
+                          />
                               <EditAssetModal
                                 asset={asset}
                                 categories={categories}
@@ -632,6 +723,12 @@ export default function AssetsList() {
                                 refreshKey={historyRefreshKey}
                               />
                               <AssetQrCodeModal asset={asset} />
+                              <Link
+                                href={`/assets/${asset.id}`}
+                                className="action-button"
+                              >
+                                Ver detalhes
+                              </Link>
                             </div>
                           </td>
                         </tr>

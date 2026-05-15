@@ -54,9 +54,28 @@ export class AssetsController {
     return this.assetsService.create(dto, req.user?.id);
   }
 
+  @Post('import')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 20 * 1024 * 1024 },
+    }),
+  )
+  import(
+    @Req() req: AuthenticatedRequest,
+    @UploadedFile() file?: UploadedAssetFile,
+    @Body('mapping') mapping?: string,
+  ) {
+    return this.assetsService.importAssets(file, mapping, req.user?.id);
+  }
+
   @Get()
   findAll(@Query() query: FindAssetsQueryDto) {
     return this.assetsService.findAll(query);
+  }
+
+  @Get(':id/details')
+  details(@Param('id') id: string) {
+    return this.assetsService.findDetails(id);
   }
 
   @Get(':id/history')

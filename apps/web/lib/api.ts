@@ -1,6 +1,7 @@
 import type {
   AuditLog,
   Asset,
+  AssetDetails,
   AssetAttachment,
   Assignment,
   AuthUser,
@@ -13,6 +14,7 @@ import type {
   Employee,
   Location,
   ReturnAssignmentInput,
+  AssetImportResult,
   UpdateAssetInput,
 } from "./types";
 
@@ -152,6 +154,16 @@ export async function getAsset(assetId: string, token?: string | null) {
   });
 }
 
+export async function getAssetDetails(
+  assetId: string,
+  token?: string | null,
+) {
+  return request<AssetDetails>(`/assets/${assetId}/details`, {
+    method: "GET",
+    token,
+  });
+}
+
 export async function getEmployees(token?: string | null) {
   return request<Employee[]>("/employees", {
     method: "GET",
@@ -254,6 +266,35 @@ export async function createAsset(
     body: payload,
     token,
   });
+}
+
+export async function importAssets(
+  file: File,
+  mapping: Record<string, string | null | undefined>,
+  token?: string | null,
+) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("mapping", JSON.stringify(mapping));
+
+  const headers = new Headers();
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const res = await fetch(`${API_BASE_URL}/assets/import`, {
+    method: "POST",
+    headers,
+    body: formData,
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new ApiError(await parseErrorMessage(res), res.status);
+  }
+
+  return res.json() as Promise<AssetImportResult>;
 }
 
 export async function updateAsset(
