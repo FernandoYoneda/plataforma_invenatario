@@ -4,17 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  getActiveAssignments,
   getAssets,
   getCategories,
   getLocations,
 } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
+import * as XLSX from "xlsx";
 import type {
   Asset,
   AssetStatus,
   AssetType,
   Category,
   Location,
+  Assignment,
 } from "@/lib/types";
 import AppShell from "./AppShell";
 import AssignAssetModal from "./AssignAssetModal";
@@ -53,6 +56,8 @@ type SortKey =
 
 type SortDirection = "asc" | "desc";
 
+type ExportFormat = "csv" | "xlsx";
+
 function moneyBRL(valueCents?: number | null) {
   if (valueCents == null) return "-";
 
@@ -60,6 +65,17 @@ function moneyBRL(valueCents?: number | null) {
     style: "currency",
     currency: "BRL",
   });
+}
+
+function formatFileTimestamp(date = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+  ].join("-") +
+    "_" +
+    [pad(date.getHours()), pad(date.getMinutes()), pad(date.getSeconds())].join("-");
 }
 
 function labelType(type: Asset["type"]) {
@@ -110,14 +126,33 @@ function sortValue(asset: Asset, key: SortKey, categories: Category[], locations
   return values[key];
 }
 
+function csvCell(value: string | number | null | undefined) {
+  const text = value == null || value === "" ? "-" : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export default function AssetsList() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [activeAssignments, setActiveAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  const [assignmentRefreshKey, setAssignmentRefreshKey] = useState(0);
   const [categories, setCategories] = useState<Category[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [referencesError, setReferencesError] = useState<string | null>(null);
@@ -131,6 +166,7 @@ export default function AssetsList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
+  const [exportOpen, setExportOpen] = useState(false);
   const locationIdFromQuery = searchParams.get("locationId") ?? "";
   const queryLocationName =
     locations.find((item) => item.id === locationIdFromQuery)?.name ?? "";
@@ -176,6 +212,21 @@ export default function AssetsList() {
     }
   }
 
+  async function loadActiveAssignments() {
+    const token = getAuthToken();
+
+    if (!token) {
+      return;
+    }
+
+    try {
+      const data = await getActiveAssignments(token);
+      setActiveAssignments(data);
+    } catch (err: unknown) {
+      handleAuthError(err);
+    }
+  }
+
   async function loadReferences() {
     const token = getAuthToken();
 
@@ -207,11 +258,15 @@ export default function AssetsList() {
 
   useEffect(() => {
     async function load() {
-      await Promise.all([loadAssets(), loadReferences()]);
+      await Promise.all([loadAssets(), loadReferences(), loadActiveAssignments()]);
     }
 
     load();
   }, [router]);
+
+  useEffect(() => {
+    loadActiveAssignments();
+  }, [assignmentRefreshKey]);
 
   useEffect(() => {
     setLocationFilter(locationIdFromQuery);
@@ -270,6 +325,10 @@ export default function AssetsList() {
       });
     });
   }, [categories, filteredAssets, locations, sortDirection, sortKey]);
+
+  const activeAssignmentByAssetId = useMemo(() => {
+    return new Map(activeAssignments.map((assignment) => [assignment.assetId, assignment]));
+  }, [activeAssignments]);
 
   const totalPages = Math.max(1, Math.ceil(sortedAssets.length / pageSize));
   const pageStartIndex = (currentPage - 1) * pageSize;
@@ -378,6 +437,98 @@ export default function AssetsList() {
     setSelectedAssetIds([]);
   }
 
+  function currentEmployeeName(asset: Asset) {
+    const assignment = activeAssignmentByAssetId.get(asset.id);
+
+    if (!assignment) {
+      return "-";
+    }
+
+    return assignment.employee?.name ?? "Funcionário removido";
+  }
+
+  function exportRows() {
+    return sortedAssets.map((asset) => [
+      asset.internalCode,
+      labelType(asset.type),
+      asset.brand,
+      asset.model ?? "",
+      asset.serialNumber ?? "",
+      assetCategoryName(asset, categories),
+      assetLocationName(asset, locations),
+      labelStatus(asset.status),
+      currentEmployeeName(asset),
+      moneyBRL(asset.valueCents),
+    ]);
+  }
+
+  function exportFileName(format: ExportFormat) {
+    return `ativos-filtrados-${formatFileTimestamp()}.${format}`;
+  }
+
+  function exportCsv() {
+    const header = [
+      "codigo",
+      "tipo",
+      "marca",
+      "modelo",
+      "serial",
+      "categoria",
+      "localizacao",
+      "status",
+      "funcionario_atual",
+      "valor",
+    ];
+
+    const rows = [
+      header,
+      ...exportRows().map((row) => row.map(csvCell)),
+    ];
+
+    const csv = rows.map((row) => row.join(";")).join("\r\n");
+    const blob = new Blob([`\ufeff${csv}`], {
+      type: "text/csv;charset=utf-8",
+    });
+
+    downloadBlob(exportFileName("csv"), blob);
+    setExportOpen(false);
+  }
+
+  function exportXlsx() {
+    const rows = [
+      [
+        "codigo",
+        "tipo",
+        "marca",
+        "modelo",
+        "serial",
+        "categoria",
+        "localizacao",
+        "status",
+        "funcionario_atual",
+        "valor",
+      ],
+      ...exportRows(),
+    ];
+
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Ativos");
+    const buffer = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "array",
+    });
+
+    downloadBlob(
+      exportFileName("xlsx"),
+      new Blob([buffer], {
+        type:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+    );
+    setExportOpen(false);
+  }
+
   function handleSort(nextKey: SortKey) {
     if (sortKey === nextKey) {
       setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
@@ -418,7 +569,38 @@ export default function AssetsList() {
       subtitle="Consulta principal de ativos, com criação, atribuições e histórico disponíveis na mesma tela."
       contentSize="wide"
       actions={
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setExportOpen((current) => !current)}
+              disabled={loading || redirecting || Boolean(error) || sortedAssets.length === 0}
+              className="btn-secondary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Exportar
+            </button>
+
+            {exportOpen ? (
+              <div className="absolute right-0 z-20 mt-2 min-w-40 overflow-hidden rounded-[18px] border bg-[var(--surface-card)] p-1 shadow-[0_18px_40px_rgba(23,58,67,0.16)] [border-color:var(--border-soft)]">
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  className="flex w-full items-center rounded-[14px] px-3 py-2 text-left text-sm [color:var(--text-primary)] hover:bg-[rgba(44,100,112,0.08)]"
+                >
+                  CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={exportXlsx}
+                  className="flex w-full items-center rounded-[14px] px-3 py-2 text-left text-sm [color:var(--text-primary)] hover:bg-[rgba(44,100,112,0.08)]"
+                >
+                  Excel
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
           <NewAssetModal
             onCreated={(asset) => {
               setAssets((current) => [asset, ...current]);
@@ -440,8 +622,10 @@ export default function AssetsList() {
               setError(null);
               setCurrentPage(1);
               setHistoryRefreshKey((current) => current + imported.length);
+              setAssignmentRefreshKey((current) => current + imported.length);
             }}
           />
+          </div>
         </div>
       }
     >
@@ -699,6 +883,7 @@ export default function AssetsList() {
                           <AssignAssetModal
                             asset={asset}
                             onAssigned={() => {
+                              setAssignmentRefreshKey((current) => current + 1);
                               setHistoryRefreshKey((current) => current + 1);
                             }}
                           />
