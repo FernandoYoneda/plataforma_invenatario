@@ -9,9 +9,7 @@ import AppShell from "./AppShell";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleString("pt-BR");
-}
+type ActionTone = "create" | "update" | "delete" | "neutral";
 
 function normalizeText(value: string) {
   return value
@@ -20,16 +18,43 @@ function normalizeText(value: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function formatDateTime(value: string) {
+  const date = new Date(value);
+
+  return {
+    date: new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(date),
+    time: new Intl.DateTimeFormat("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(date),
+  };
+}
+
+function actionTone(action: string): ActionTone {
+  if (/CREATED|IMPORTED|UPLOADED/i.test(action)) return "create";
+  if (/UPDATED/i.test(action)) return "update";
+  if (/DELETED|INACTIVATED|RETURNED/i.test(action)) return "delete";
+  return "neutral";
+}
+
 function actionLabel(action: string) {
   const labels: Record<string, string> = {
     ASSET_CREATED: "Ativo criado",
     ASSET_UPDATED: "Ativo atualizado",
+    ASSET_IMPORTED: "Ativos importados",
     ASSIGNMENT_CREATED: "Atribuição criada",
     ASSIGNMENT_RETURNED: "Atribuição devolvida",
     EMPLOYEE_CREATED: "Funcionário criado",
     EMPLOYEE_INACTIVATED: "Funcionário inativado",
     ATTACHMENT_UPLOADED: "Anexo enviado",
     IMPORT_COMPLETED: "Importação concluída",
+    ASSET_DELETED: "Ativo excluído",
   };
 
   if (labels[action]) {
@@ -59,12 +84,30 @@ function entityLabelWithId(log: AuditLog) {
   return `${entityLabel(log.entityType)} ${log.entityId.slice(0, 8)}`;
 }
 
+function actionBadgeClass(action: string) {
+  const tone = actionTone(action);
+
+  if (tone === "create") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+
+  if (tone === "update") {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+
+  if (tone === "delete") {
+    return "border-rose-200 bg-rose-50 text-rose-800";
+  }
+
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
 function csvValue(value: string) {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
-function displayDescription(log: AuditLog) {
-  const text = log.description.trim();
+function prettifyDescription(rawDescription: string) {
+  const text = rawDescription.trim();
   const replacements: Array<[RegExp, string]> = [
     [/\bAsset\b/gi, "Ativo"],
     [/\basset\b/gi, "ativo"],
@@ -78,11 +121,12 @@ function displayDescription(log: AuditLog) {
     [/\blocation\b/gi, "localização"],
     [/\bupdated\b/gi, "atualizado"],
     [/\bcreated\b/gi, "criado"],
+    [/\bdeleted\b/gi, "excluído"],
     [/\breturned\b/gi, "devolvido"],
     [/\bassigned to\b/gi, "atribuído para"],
     [/\buploaded\b/gi, "enviado"],
-    [/\bdeleted\b/gi, "excluído"],
     [/\bcompleted\b/gi, "concluída"],
+    [/\bimported\b/gi, "importado"],
   ];
 
   let normalized = text;
@@ -93,15 +137,47 @@ function displayDescription(log: AuditLog) {
   normalized = normalized
     .replace(/\bFuncionario\b/g, "Funcionário")
     .replace(/\bfuncionario\b/g, "funcionário")
-    .replace(/\bAtribuicao\b/g, "Atribuição")
-    .replace(/\batribuição\b/g, "atribuição");
+    .replace(/\bAtribuicao\b/g, "Atribuição");
+
+  const assetUpdated = /^Ativo\s+(.+?)\s+atualizado$/i.exec(normalized);
+  if (assetUpdated) {
+    return `Ativo ${assetUpdated[1]} atualizado`;
+  }
+
+  const assetDeleted = /^Ativo\s+(.+?)\s+excluído$/i.exec(normalized);
+  if (assetDeleted) {
+    return `Ativo ${assetDeleted[1]} excluído`;
+  }
+
+  const assigned = /^(.+?)\s+atribuído\s+para\s+(.+)$/i.exec(normalized);
+  if (assigned) {
+    return `${assigned[1]} atribuído para ${assigned[2]}`;
+  }
+
+  const returned = /^(.+?)\s+devolvido\s+por\s+(.+)$/i.exec(normalized);
+  if (returned) {
+    return `${returned[1]} devolvido por ${returned[2]}`;
+  }
 
   return normalized;
+}
+
+function describeLog(log: AuditLog) {
+  const description = prettifyDescription(log.description);
+
+  if (log.entityType === "Asset") {
+    if (/atualizado$/i.test(description) || /criado$/i.test(description)) {
+      return description;
+    }
+  }
+
+  return description;
 }
 
 function buildCsv(rows: AuditLog[]) {
   const header = [
     "data",
+    "hora",
     "acao",
     "entidade",
     "id_entidade",
@@ -110,19 +186,22 @@ function buildCsv(rows: AuditLog[]) {
     "email_usuario",
   ];
 
-  const lines = rows.map((log) =>
-    [
-      formatDate(log.createdAt),
+  const lines = rows.map((log) => {
+    const dateTime = formatDateTime(log.createdAt);
+
+    return [
+      dateTime.date,
+      dateTime.time,
       actionLabel(log.action),
       entityLabel(log.entityType),
       log.entityId,
-      displayDescription(log),
+      describeLog(log),
       log.user?.name ?? "",
       log.user?.email ?? "",
     ]
       .map(csvValue)
-      .join(","),
-  );
+      .join(",");
+  });
 
   return [header.map(csvValue).join(","), ...lines].join("\r\n");
 }
@@ -130,7 +209,7 @@ function buildCsv(rows: AuditLog[]) {
 function searchText(log: AuditLog) {
   return [
     log.description,
-    displayDescription(log),
+    describeLog(log),
     log.entityType,
     entityLabel(log.entityType),
     log.action,
@@ -225,17 +304,20 @@ export default function AuditView() {
         const matchesSearch =
           !normalizedSearch ||
           normalizeText(searchText(log)).includes(normalizedSearch);
-
         const matchesAction = !actionFilter || log.action === actionFilter;
         const matchesEntity = !entityFilter || log.entityType === entityFilter;
 
         const createdAt = new Date(log.createdAt).getTime();
         const fromTime = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
         const toTime = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
-        const matchesFrom = fromTime == null || createdAt >= fromTime;
-        const matchesTo = toTime == null || createdAt <= toTime;
 
-        return matchesSearch && matchesAction && matchesEntity && matchesFrom && matchesTo;
+        return (
+          matchesSearch &&
+          matchesAction &&
+          matchesEntity &&
+          (fromTime == null || createdAt >= fromTime) &&
+          (toTime == null || createdAt <= toTime)
+        );
       })
       .sort((a, b) => {
         const delta =
@@ -248,6 +330,7 @@ export default function AuditView() {
   const pageStartIndex = filteredLogs.length === 0 ? 0 : (currentPage - 1) * pageSize;
   const pageEndIndex = Math.min(pageStartIndex + pageSize, filteredLogs.length);
   const paginatedLogs = filteredLogs.slice(pageStartIndex, pageEndIndex);
+
   const hasFilters = Boolean(
     search.trim() || actionFilter || entityFilter || dateFrom || dateTo,
   );
@@ -341,7 +424,7 @@ export default function AuditView() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 className="brand-input mt-1.5"
-                placeholder="Descrição, entidade ou ação"
+                placeholder="Descrição, entidade, ação ou usuário"
               />
             </label>
 
@@ -448,26 +531,41 @@ export default function AuditView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedLogs.map((log) => (
-                    <tr key={log.id}>
-                      <td className="whitespace-nowrap">{formatDate(log.createdAt)}</td>
-                      <td className="cell-strong">{actionLabel(log.action)}</td>
-                      <td>{entityLabelWithId(log)}</td>
-                      <td>{displayDescription(log)}</td>
-                      <td>
-                        {log.user ? `${log.user.name} (${log.user.email})` : "-"}
-                      </td>
-                    </tr>
-                  ))}
+                  {paginatedLogs.map((log) => {
+                    const dateTime = formatDateTime(log.createdAt);
+
+                    return (
+                      <tr key={log.id}>
+                        <td className="whitespace-nowrap">
+                          <div className="flex flex-col">
+                            <span className="cell-strong">{dateTime.date}</span>
+                            <span className="text-xs text-[var(--text-secondary)]">
+                              {dateTime.time}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${actionBadgeClass(log.action)}`}
+                          >
+                            {actionLabel(log.action)}
+                          </span>
+                        </td>
+                        <td>{entityLabelWithId(log)}</td>
+                        <td>{describeLog(log)}</td>
+                        <td>
+                          {log.user ? `${log.user.name} (${log.user.email})` : "-"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             <div className="flex flex-col gap-4 border-t px-6 py-5 [border-color:var(--border-soft)] lg:flex-row lg:items-center lg:justify-between">
               <div className="text-sm [color:var(--text-secondary)]">
-                {filteredLogs.length === 0
-                  ? "Mostrando 0 de 0 registro(s)"
-                  : `Mostrando ${pageStartIndex + 1}-${pageEndIndex} de ${filteredLogs.length} registro(s)`}
+                Mostrando {pageStartIndex + 1}-{pageEndIndex} de {filteredLogs.length} registro(s)
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
@@ -509,9 +607,7 @@ export default function AuditView() {
                   <button
                     type="button"
                     onClick={() =>
-                      setCurrentPage((current) =>
-                        Math.min(current + 1, totalPages),
-                      )
+                      setCurrentPage((current) => Math.min(current + 1, totalPages))
                     }
                     disabled={currentPage === totalPages || filteredLogs.length === 0}
                     className="btn-secondary px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
