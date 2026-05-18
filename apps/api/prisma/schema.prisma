@@ -8,6 +8,9 @@ datasource db {
 
 enum Role {
   ADMIN
+  TI
+  GESTOR
+  LEITURA
   OPERADOR
   CONSULTA
 }

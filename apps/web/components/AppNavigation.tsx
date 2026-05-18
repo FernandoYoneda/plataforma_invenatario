@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import BrandLogo from "./BrandLogo";
 import LogoutButton from "./LogoutButton";
+import { useAuth } from "./AuthProvider";
+import { canManageReferences, roleLabel } from "@/lib/permissions";
 
 export type NavKey =
   | "dashboard"
@@ -120,8 +122,23 @@ export default function AppNavigation({
   theme: "light" | "dark";
   onThemeChange: (theme: "light" | "dark") => void;
 }) {
+  const [mounted, setMounted] = useState(false);
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const itemClass = (key: NavKey) =>
     key === current ? "app-nav-item app-nav-item-active" : "app-nav-item";
+
+  const visibleMainItems = mainItems.filter((item) => {
+    if (item.key === "categories" || item.key === "locations") {
+      return canManageReferences(user?.role);
+    }
+
+    return true;
+  });
 
   return (
     <aside
@@ -151,8 +168,22 @@ export default function AppNavigation({
           </p>
         </div>
 
+        <section className="rounded-[1.15rem] border border-white/10 bg-white/6 px-4 py-4">
+          <div className="text-[0.7rem] font-semibold uppercase tracking-[0.22em] text-white/48">
+            Perfil
+          </div>
+          <div className="mt-3 min-w-0">
+            <div className="truncate text-sm font-semibold text-white/90">
+              {loading ? "Carregando perfil..." : user?.name ?? "Usuario"}
+            </div>
+            <div className="mt-1 text-xs text-white/68">
+              {loading ? "Aguardando autenticacao..." : roleLabel(user?.role)}
+            </div>
+          </div>
+        </section>
+
         <nav className="space-y-2">
-          {mainItems.map((item) => (
+          {visibleMainItems.map((item) => (
             <Link
               key={item.key}
               href={item.href}
@@ -173,16 +204,24 @@ export default function AppNavigation({
             <button
               type="button"
               onClick={() => onThemeChange("light")}
-              className={theme === "light" ? "theme-toggle-option theme-toggle-option-active" : "theme-toggle-option"}
-              aria-pressed={theme === "light"}
+              className={
+                mounted && theme === "light"
+                  ? "theme-toggle-option theme-toggle-option-active"
+                  : "theme-toggle-option"
+              }
+              aria-pressed={mounted ? theme === "light" : undefined}
             >
               Claro
             </button>
             <button
               type="button"
               onClick={() => onThemeChange("dark")}
-              className={theme === "dark" ? "theme-toggle-option theme-toggle-option-active" : "theme-toggle-option"}
-              aria-pressed={theme === "dark"}
+              className={
+                mounted && theme === "dark"
+                  ? "theme-toggle-option theme-toggle-option-active"
+                  : "theme-toggle-option"
+              }
+              aria-pressed={mounted ? theme === "dark" : undefined}
             >
               Escuro
             </button>

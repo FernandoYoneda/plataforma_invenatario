@@ -181,6 +181,59 @@ body {
     border-color: rgba(242, 236, 229, 0.08);
   }
 
+  [data-theme="dark"] .employee-detail-panel,
+  [data-theme="dark"] .employee-detail-stat,
+  [data-theme="dark"] .employee-detail-timeline-item,
+  [data-theme="dark"] .employee-detail-audit-item,
+  [data-theme="dark"] .employee-assignments-panel,
+  [data-theme="dark"] .employee-assignments-section {
+    background: rgba(11, 26, 31, 0.94);
+    border-color: rgba(242, 236, 229, 0.1);
+    color: var(--text-primary);
+  }
+
+  [data-theme="dark"] .employee-assignments-selected,
+  [data-theme="dark"] .employee-assignments-card {
+    background: rgba(13, 29, 35, 0.98);
+    border-color: rgba(242, 236, 229, 0.1);
+    color: var(--text-primary);
+  }
+
+  [data-theme="dark"] .employee-detail-panel .text-xs,
+  [data-theme="dark"] .employee-detail-panel .text-sm,
+  [data-theme="dark"] .employee-detail-panel .text-base,
+  [data-theme="dark"] .employee-detail-panel .text-lg,
+  [data-theme="dark"] .employee-detail-panel .text-xl,
+  [data-theme="dark"] .employee-assignments-panel .text-xs,
+  [data-theme="dark"] .employee-assignments-panel .text-sm,
+  [data-theme="dark"] .employee-assignments-panel .text-base,
+  [data-theme="dark"] .employee-assignments-panel .text-lg,
+  [data-theme="dark"] .employee-assignments-panel .text-xl,
+  [data-theme="dark"] .employee-assignments-section .text-xs,
+  [data-theme="dark"] .employee-assignments-section .text-sm,
+  [data-theme="dark"] .employee-assignments-section .text-base,
+  [data-theme="dark"] .employee-assignments-section .text-lg,
+  [data-theme="dark"] .employee-assignments-section .text-xl {
+    color: var(--text-primary);
+  }
+
+  [data-theme="dark"] .employee-detail-panel [style*="color:var(--text-secondary)"],
+  [data-theme="dark"] .employee-assignments-panel [style*="color:var(--text-secondary)"],
+  [data-theme="dark"] .employee-assignments-section [style*="color:var(--text-secondary)"] {
+    color: var(--text-secondary) !important;
+  }
+
+  [data-theme="dark"] .employee-assignment-selected {
+    background: rgba(120, 184, 173, 0.14);
+  }
+
+  [data-theme="dark"] .employee-assignments-card .status-pill,
+  [data-theme="dark"] .employee-assignments-selected .status-pill {
+    background: rgba(120, 184, 173, 0.14);
+    color: var(--text-primary);
+    border-color: rgba(120, 184, 173, 0.24);
+  }
+
   [data-theme="dark"] .app-page-body > section,
   [data-theme="dark"] .app-page-body > article {
     background: rgba(13, 29, 35, 0.96) !important;

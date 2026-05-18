@@ -6,7 +6,9 @@ import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { createEmployee } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
+import { canManageEmployees } from "@/lib/permissions";
 import type { Employee } from "@/lib/types";
+import { useAuth } from "./AuthProvider";
 
 type ImportedRow = {
   rowNumber: number;
@@ -206,6 +208,7 @@ export default function ImportEmployeesModal({
   employees: Employee[];
   onImported: (items: Employee[]) => void;
 }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -364,6 +367,10 @@ export default function ImportEmployeesModal({
     } finally {
       setUploading(false);
     }
+  }
+
+  if (!canManageEmployees(user?.role)) {
+    return null;
   }
 
   const modal = (

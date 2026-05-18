@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getAuditLogs } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
+import { useAuth } from "./AuthProvider";
+import { canExportReports } from "@/lib/permissions";
 import type { AuditLog } from "@/lib/types";
 import AppShell from "./AppShell";
 
@@ -224,10 +226,12 @@ function searchText(log: AuditLog) {
 
 export default function AuditView() {
   const router = useRouter();
+  const { user } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
+  const canExportAudit = canExportReports(user?.role);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
@@ -405,14 +409,16 @@ export default function AuditView() {
             >
               {sortDirection === "desc" ? "Data ↓" : "Data ↑"}
             </button>
-            <button
-              type="button"
-              onClick={exportCsv}
-              disabled={loading || Boolean(error) || redirecting || filteredLogs.length === 0}
-              className="btn-primary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              Exportar CSV
-            </button>
+            {canExportAudit ? (
+              <button
+                type="button"
+                onClick={exportCsv}
+                disabled={loading || Boolean(error) || redirecting || filteredLogs.length === 0}
+                className="btn-primary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Exportar CSV
+              </button>
+            ) : null}
           </div>
         </div>
 

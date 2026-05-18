@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getActiveAssignments, getAssets, getEmployees } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
+import { useAuth } from "./AuthProvider";
+import { canExportReports } from "@/lib/permissions";
 import type {
   Asset,
   AssetStatus,
@@ -174,6 +176,7 @@ function BarChart({ items }: { items: GroupItem[] }) {
 
 export default function ReportsView() {
   const router = useRouter();
+  const { user } = useAuth();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -185,6 +188,7 @@ export default function ReportsView() {
   const [typeFilter, setTypeFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+  const canExportData = canExportReports(user?.role);
 
   function handleAuthError(err: unknown) {
     if (
@@ -367,14 +371,16 @@ export default function ReportsView() {
       subtitle="Indicadores operacionais do inventário e exportação dos ativos filtrados."
       contentSize="wide"
       actions={
-        <button
-          type="button"
-          onClick={exportFilteredAssets}
-          disabled={loading || redirecting || Boolean(error) || filteredAssets.length === 0}
-          className="btn-primary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          Exportar CSV
-        </button>
+        canExportData ? (
+          <button
+            type="button"
+            onClick={exportFilteredAssets}
+            disabled={loading || redirecting || Boolean(error) || filteredAssets.length === 0}
+            className="btn-primary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            Exportar CSV
+          </button>
+        ) : null
       }
     >
       {redirecting ? (
@@ -599,14 +605,16 @@ export default function ReportsView() {
                   </strong>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={exportFilteredAssets}
-                disabled={loading || filteredAssets.length === 0}
-                className="btn-primary mt-6 w-full px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                Exportar ativos filtrados
-              </button>
+              {canExportData ? (
+                <button
+                  type="button"
+                  onClick={exportFilteredAssets}
+                  disabled={loading || filteredAssets.length === 0}
+                  className="btn-primary mt-6 w-full px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Exportar ativos filtrados
+                </button>
+              ) : null}
             </article>
           </section>
         </>

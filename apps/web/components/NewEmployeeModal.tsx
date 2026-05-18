@@ -5,13 +5,16 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { createEmployee } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
+import { canManageEmployees } from "@/lib/permissions";
 import type { Employee } from "@/lib/types";
+import { useAuth } from "./AuthProvider";
 
 export default function NewEmployeeModal({
   onCreated,
 }: {
   onCreated: (employee: Employee) => void;
 }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -108,6 +111,10 @@ export default function NewEmployeeModal({
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!canManageEmployees(user?.role)) {
+    return null;
   }
 
   const modal = (

@@ -5,7 +5,9 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { createAssignment, getActiveEmployees } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
+import { canManageAssignments } from "@/lib/permissions";
 import type { Asset, Assignment, Employee } from "@/lib/types";
+import { useAuth } from "./AuthProvider";
 
 function AssignIcon() {
   return (
@@ -24,6 +26,7 @@ export default function AssignAssetModal({
   asset: Asset;
   onAssigned: (assignment: Assignment) => void;
 }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -154,6 +157,10 @@ export default function AssignAssetModal({
     } finally {
       setLoadingSubmit(false);
     }
+  }
+
+  if (!canManageAssignments(user?.role)) {
+    return null;
   }
 
   const modal = (

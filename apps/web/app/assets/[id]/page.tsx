@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, getAssetDetails, getCurrentUser } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
+import { canManageAssets } from "@/lib/permissions";
 import type { Asset, AssetDetails } from "@/lib/types";
 import AppShell from "../../../components/AppShell";
 import AssetAttachmentsPanel from "../../../components/AssetAttachmentsPanel";
@@ -116,7 +117,7 @@ export default function AssetDetailsPage() {
 
         if (!active) return;
         setDetails(detailsData);
-        setIsAdmin(userData.role === "ADMIN");
+        setIsAdmin(canManageAssets(userData.role));
       } catch (err: unknown) {
         if (!active) return;
 

@@ -3,8 +3,10 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { useAuth } from "./AuthProvider";
 import { createAsset, getCategories, getLocations } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
+import { canManageAssets } from "@/lib/permissions";
 import type {
   Asset,
   AssetStatus,
@@ -45,6 +47,7 @@ export default function NewAssetModal({
 }: {
   onCreated: (asset: Asset) => void;
 }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -230,6 +233,10 @@ export default function NewAssetModal({
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!canManageAssets(user?.role)) {
+    return null;
   }
 
   const modal = (

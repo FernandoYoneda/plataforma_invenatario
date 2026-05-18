@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import { inactivateEmployee } from "@/lib/api";
+import { canManageEmployees } from "@/lib/permissions";
 import type { Employee } from "@/lib/types";
+import { useAuth } from "./AuthProvider";
 
 export default function DeleteEmployeeButton({
   employee,
@@ -15,6 +17,7 @@ export default function DeleteEmployeeButton({
   onDeleted: (employeeId: string) => void;
 }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -95,6 +98,10 @@ export default function DeleteEmployeeButton({
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!canManageEmployees(user?.role)) {
+    return null;
   }
 
   return (

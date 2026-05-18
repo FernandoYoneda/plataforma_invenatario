@@ -172,7 +172,7 @@ export type AuthUser = {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "OPERADOR" | "CONSULTA";
+  role: "ADMIN" | "TI" | "GESTOR" | "LEITURA" | "OPERADOR" | "CONSULTA";
   createdAt?: string;
   updatedAt?: string;
 };

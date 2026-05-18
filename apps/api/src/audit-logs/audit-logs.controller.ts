@@ -11,7 +11,7 @@ export class AuditLogsController {
   constructor(private readonly auditLogsService: AuditLogsService) {}
 
   @Get()
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI, Role.GESTOR, Role.LEITURA)
   findAll() {
     return this.auditLogsService.findAll();
   }

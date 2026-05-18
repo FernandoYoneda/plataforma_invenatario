@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getEmployeesList } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
@@ -181,6 +182,12 @@ export default function EmployeesView() {
                     <td>
                       {employee.isActive ? (
                         <div className="asset-actions-row justify-start">
+                          <Link
+                            href={`/employees/${employee.id}`}
+                            className="action-button"
+                          >
+                            Ver perfil
+                          </Link>
                           <EmployeeAssignmentsModal employee={employee} />
                           <DeleteEmployeeButton
                             employee={employee}
@@ -199,7 +206,12 @@ export default function EmployeesView() {
                           />
                         </div>
                       ) : (
-                        <span className="text-sm [color:var(--text-muted)]">-</span>
+                        <Link
+                          href={`/employees/${employee.id}`}
+                          className="action-button"
+                        >
+                          Ver perfil
+                        </Link>
                       )}
                     </td>
                   </tr>

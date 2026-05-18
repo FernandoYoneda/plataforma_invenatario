@@ -327,7 +327,7 @@ export default function AssetAttachmentsPanel({
           </div>
         ) : (
           <div className="surface-soft rounded-[24px] px-4 py-4 text-sm [color:var(--text-secondary)]">
-            Upload e exclusao de anexos sao restritos a administradores.
+            Upload e exclusao de anexos sao restritos a perfis operacionais.
           </div>
         )}
 

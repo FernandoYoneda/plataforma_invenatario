@@ -50,11 +50,13 @@ export class AssetsController {
   ) {}
 
   @Post()
+  @Roles(Role.ADMIN, Role.TI)
   create(@Body() dto: CreateAssetDto, @Req() req: AuthenticatedRequest) {
     return this.assetsService.create(dto, req.user?.id);
   }
 
   @Post('import')
+  @Roles(Role.ADMIN, Role.TI)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: 20 * 1024 * 1024 },
@@ -89,7 +91,7 @@ export class AssetsController {
   }
 
   @Post(':id/attachments')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: MAX_ASSET_ATTACHMENT_SIZE },
@@ -122,7 +124,7 @@ export class AssetsController {
   }
 
   @Delete(':id/attachments/:attachmentId')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI)
   deleteAttachment(
     @Param('id') id: string,
     @Param('attachmentId') attachmentId: string,
@@ -136,6 +138,7 @@ export class AssetsController {
   }
 
   @Patch(':id')
+  @Roles(Role.ADMIN, Role.TI)
   update(
     @Param('id') id: string,
     @Body() dto: UpdateAssetDto,
@@ -144,6 +147,7 @@ export class AssetsController {
     return this.assetsService.update(id, dto, req.user?.id);
   }
   @Delete(':id')
+  @Roles(Role.ADMIN, Role.TI)
   remove(@Param('id') id: string) {
     return this.assetsService.remove(id);
   }

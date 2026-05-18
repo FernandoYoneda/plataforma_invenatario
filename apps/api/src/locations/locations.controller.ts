@@ -27,19 +27,19 @@ export class LocationsController {
   }
 
   @Post()
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI)
   create(@Body() dto: CreateLocationDto) {
     return this.locationsService.create(dto);
   }
 
   @Patch(':id')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI)
   update(@Param('id') id: string, @Body() dto: UpdateLocationDto) {
     return this.locationsService.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI)
   remove(@Param('id') id: string) {
     return this.locationsService.remove(id);
   }

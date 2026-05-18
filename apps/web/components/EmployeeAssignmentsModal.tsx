@@ -11,7 +11,9 @@ import {
   returnAssignment,
 } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
+import { canManageAssignments } from "@/lib/permissions";
 import type { Asset, Assignment, Employee } from "@/lib/types";
+import { useAuth } from "./AuthProvider";
 
 type FilterState = {
   search: string;
@@ -57,6 +59,7 @@ export default function EmployeeAssignmentsModal({
 }: {
   employee: Employee;
 }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -354,6 +357,10 @@ export default function EmployeeAssignmentsModal({
     }
   }
 
+  if (!canManageAssignments(user?.role)) {
+    return null;
+  }
+
   const modal = (
     <div className="fixed inset-0 z-[99999]" onClick={close}>
       <div className="absolute inset-0 bg-[rgba(23,58,67,0.66)] backdrop-blur-[3px]" />
@@ -417,7 +424,7 @@ export default function EmployeeAssignmentsModal({
                 </div>
 
                 {assignPanelOpen ? (
-                  <section className="surface-soft rounded-[24px] p-4">
+                  <section className="employee-assignments-panel employee-assignments-section surface-soft rounded-[24px] p-4">
                     <div className="flex flex-col gap-3 border-b pb-4 [border-color:var(--border-soft)] sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <h3 className="text-sm font-semibold [color:var(--text-primary)]">
@@ -483,7 +490,7 @@ export default function EmployeeAssignmentsModal({
                     </div>
 
                     <form onSubmit={handleAssign}>
-                      <div className="mt-4 overflow-auto">
+                  <div className="mt-4 overflow-auto">
                         {availableAssets.length === 0 ? (
                           <div className="text-sm [color:var(--text-secondary)]">
                             Nenhum ativo disponivel para atribuicao.
@@ -508,7 +515,7 @@ export default function EmployeeAssignmentsModal({
                                   key={asset.id}
                                   className={
                                     selectedAssetId === asset.id
-                                      ? "bg-[rgba(31,75,85,0.06)]"
+                                      ? "employee-assignment-selected"
                                       : ""
                                   }
                                 >
@@ -538,7 +545,7 @@ export default function EmployeeAssignmentsModal({
                       </div>
 
                       {selectedAsset ? (
-                        <div className="mt-4 surface-soft rounded-[24px] px-4 py-4">
+                        <div className="employee-assignments-selected mt-4 surface-soft rounded-[24px] px-4 py-4">
                           <div className="font-semibold [color:var(--text-primary)]">
                             {assetTitle(selectedAsset)}
                           </div>
@@ -585,7 +592,7 @@ export default function EmployeeAssignmentsModal({
                   </section>
                 ) : null}
 
-                <section className="surface-soft rounded-[24px] p-4">
+                <section className="employee-assignments-panel employee-assignments-section surface-soft rounded-[24px] p-4">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold [color:var(--text-primary)]">
                       Ativos atuais
@@ -601,10 +608,10 @@ export default function EmployeeAssignmentsModal({
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {activeEmployeeAssignments.map((assignment) => (
+                      {activeEmployeeAssignments.map((assignment, index) => (
                         <article
-                          key={assignment.id}
-                          className="rounded-[20px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.76)] p-4"
+                          key={`${assignment.id}-${index}`}
+                          className="employee-assignments-card rounded-[20px] border border-[var(--border-soft)] p-4"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
@@ -648,7 +655,7 @@ export default function EmployeeAssignmentsModal({
                   )}
                 </section>
 
-                <section className="surface-soft rounded-[24px] p-4">
+                <section className="employee-assignments-panel employee-assignments-section surface-soft rounded-[24px] p-4">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold [color:var(--text-primary)]">
                       Historico de atribuicoes
@@ -664,10 +671,10 @@ export default function EmployeeAssignmentsModal({
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {historyAssignments.map((assignment) => (
+                      {historyAssignments.map((assignment, index) => (
                         <article
-                          key={assignment.id}
-                          className="rounded-[20px] border border-[var(--border-soft)] bg-[rgba(255,255,255,0.76)] p-4"
+                          key={`${assignment.id}-${index}`}
+                          className="employee-assignments-card rounded-[20px] border border-[var(--border-soft)] p-4"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>

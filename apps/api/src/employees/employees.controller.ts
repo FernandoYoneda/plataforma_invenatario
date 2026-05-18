@@ -40,25 +40,25 @@ export class EmployeesController {
   }
 
   @Post()
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI)
   create(@Body() dto: CreateEmployeeDto, @Req() req: AuthenticatedRequest) {
     return this.employeesService.create(dto, req.user?.id);
   }
 
   @Patch(':id')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI)
   update(@Param('id') id: string, @Body() dto: UpdateEmployeeDto) {
     return this.employeesService.update(id, dto);
   }
 
   @Patch(':id/inactivate')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI)
   inactivate(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.employeesService.inactivate(id, req.user?.id);
   }
 
   @Delete(':id')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI)
   remove(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.employeesService.inactivate(id, req.user?.id);
   }

@@ -10,6 +10,8 @@ import {
   getLocations,
 } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
+import { useAuth } from "./AuthProvider";
+import { canExportReports, canManageAssets } from "@/lib/permissions";
 import * as XLSX from "xlsx";
 import type {
   Asset,
@@ -146,6 +148,7 @@ function downloadBlob(filename: string, blob: Blob) {
 export default function AssetsList() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [activeAssignments, setActiveAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -170,6 +173,8 @@ export default function AssetsList() {
   const locationIdFromQuery = searchParams.get("locationId") ?? "";
   const queryLocationName =
     locations.find((item) => item.id === locationIdFromQuery)?.name ?? "";
+  const canBulkManageAssets = canManageAssets(user?.role);
+  const canExportAssets = canExportReports(user?.role);
 
   function handleAuthError(err: unknown) {
     if (
@@ -570,35 +575,37 @@ export default function AssetsList() {
       contentSize="wide"
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setExportOpen((current) => !current)}
-              disabled={loading || redirecting || Boolean(error) || sortedAssets.length === 0}
-              className="btn-secondary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              Exportar
-            </button>
+          {canExportAssets ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setExportOpen((current) => !current)}
+                disabled={loading || redirecting || Boolean(error) || sortedAssets.length === 0}
+                className="btn-secondary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Exportar
+              </button>
 
-            {exportOpen ? (
-              <div className="absolute right-0 z-20 mt-2 min-w-40 overflow-hidden rounded-[18px] border bg-[var(--surface-card)] p-1 shadow-[0_18px_40px_rgba(23,58,67,0.16)] [border-color:var(--border-soft)]">
-                <button
-                  type="button"
-                  onClick={exportCsv}
-                  className="flex w-full items-center rounded-[14px] px-3 py-2 text-left text-sm [color:var(--text-primary)] hover:bg-[rgba(44,100,112,0.08)]"
-                >
-                  CSV
-                </button>
-                <button
-                  type="button"
-                  onClick={exportXlsx}
-                  className="flex w-full items-center rounded-[14px] px-3 py-2 text-left text-sm [color:var(--text-primary)] hover:bg-[rgba(44,100,112,0.08)]"
-                >
-                  Excel
-                </button>
-              </div>
-            ) : null}
-          </div>
+              {exportOpen ? (
+                <div className="absolute right-0 z-20 mt-2 min-w-40 overflow-hidden rounded-[18px] border bg-[var(--surface-card)] p-1 shadow-[0_18px_40px_rgba(23,58,67,0.16)] [border-color:var(--border-soft)]">
+                  <button
+                    type="button"
+                    onClick={exportCsv}
+                    className="flex w-full items-center rounded-[14px] px-3 py-2 text-left text-sm [color:var(--text-primary)] hover:bg-[rgba(44,100,112,0.08)]"
+                  >
+                    CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportXlsx}
+                    className="flex w-full items-center rounded-[14px] px-3 py-2 text-left text-sm [color:var(--text-primary)] hover:bg-[rgba(44,100,112,0.08)]"
+                  >
+                    Excel
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap gap-2">
           <NewAssetModal
@@ -668,7 +675,7 @@ export default function AssetsList() {
                       : `${assets.length} ativo(s)`}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {selectedCount > 0 ? (
+                {canBulkManageAssets && selectedCount > 0 ? (
                   <>
                     <span className="status-pill">
                       {selectedCount} selecionado(s)

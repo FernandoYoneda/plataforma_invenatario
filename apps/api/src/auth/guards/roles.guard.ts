@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Role } from '@prisma/client';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import { normalizeRole } from '../roles';
 
 type RequestUser = {
   role?: Role | string;
@@ -27,9 +28,12 @@ export class RolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<{ user?: RequestUser }>();
-    const userRole = request.user?.role as Role | undefined;
+    const userRole = normalizeRole(request.user?.role);
+    const normalizedRequiredRoles = requiredRoles
+      .map((role) => normalizeRole(role))
+      .filter(Boolean) as Role[];
 
-    if (!userRole || !requiredRoles.includes(userRole)) {
+    if (!userRole || !normalizedRequiredRoles.includes(userRole)) {
       throw new ForbiddenException('Acesso restrito');
     }
 

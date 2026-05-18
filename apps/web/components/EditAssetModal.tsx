@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getCategories, getLocations, updateAsset } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
+import { canManageAssets } from "@/lib/permissions";
 import type {
   Asset,
   AssetStatus,
@@ -13,6 +14,7 @@ import type {
   Category,
   Location,
 } from "@/lib/types";
+import { useAuth } from "./AuthProvider";
 
 const TYPES: { value: AssetType; label: string }[] = [
   { value: "DESKTOP", label: "Computador (Desktop)" },
@@ -61,6 +63,7 @@ export default function EditAssetModal({
   onUpdated?: (asset: Asset) => void;
 }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -267,6 +270,10 @@ export default function EditAssetModal({
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!canManageAssets(user?.role)) {
+    return null;
   }
 
   const modal = (

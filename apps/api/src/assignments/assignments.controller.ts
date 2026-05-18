@@ -32,13 +32,13 @@ export class AssignmentsController {
   }
 
   @Post()
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI)
   create(@Body() dto: CreateAssignmentDto, @Req() req: AuthenticatedRequest) {
     return this.assignmentsService.create(dto, req.user?.id);
   }
 
   @Post(':id/return')
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.TI)
   returnAssignment(
     @Param('id') id: string,
     @Body() dto: ReturnAssignmentDto,

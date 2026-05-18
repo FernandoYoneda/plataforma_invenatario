@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { getAuthToken } from "@/lib/auth";
+import { canManageReferences } from "@/lib/permissions";
+import { useAuth } from "./AuthProvider";
 
 type ReferenceItem = {
   id: string;
@@ -40,6 +42,7 @@ export default function NewReferenceModal<TItem extends ReferenceItem>({
   ) => Promise<TItem>;
   onCreated: (item: TItem) => void;
 }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -136,6 +139,10 @@ export default function NewReferenceModal<TItem extends ReferenceItem>({
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!canManageReferences(user?.role)) {
+    return null;
   }
 
   const modal = (

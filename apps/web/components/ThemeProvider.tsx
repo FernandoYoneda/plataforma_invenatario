@@ -31,14 +31,25 @@ function readTheme(): ThemeMode {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>(readTheme);
+  const [theme, setThemeState] = useState<ThemeMode>("light");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    const initialTheme = readTheme();
+    setThemeState(initialTheme);
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+
     const root = document.documentElement;
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
     window.localStorage.setItem("casabella-theme", theme);
-  }, [theme]);
+  }, [mounted, theme]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({

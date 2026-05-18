@@ -6,7 +6,9 @@ import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { importAssets } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
+import { canManageAssets } from "@/lib/permissions";
 import type { Asset, Category, Location } from "@/lib/types";
+import { useAuth } from "./AuthProvider";
 
 type ImportField =
   | "internalCode"
@@ -388,6 +390,7 @@ export default function ImportAssetsModal({
   locations: Location[];
   onImported: (imported: Asset[]) => void;
 }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -401,6 +404,10 @@ export default function ImportAssetsModal({
   const [importResult, setImportResult] = useState<
     Awaited<ReturnType<typeof importAssets>> | null
   >(null);
+
+  if (!canManageAssets(user?.role)) {
+    return null;
+  }
 
   useEffect(() => setMounted(true), []);
 

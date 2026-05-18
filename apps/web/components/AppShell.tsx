@@ -3,6 +3,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { NavKey } from "./AppNavigation";
 import AppNavigation from "./AppNavigation";
+import GlobalSearch from "./GlobalSearch";
+import { useAuth } from "./AuthProvider";
+import { roleLabel } from "@/lib/permissions";
 import { useTheme } from "./ThemeProvider";
 
 type ContentSize = "compact" | "standard" | "wide" | "full";
@@ -24,6 +27,7 @@ export default function AppShell({
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { theme, setTheme } = useTheme();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -89,7 +93,13 @@ export default function AppShell({
               <p className="page-subtitle mt-3 max-w-3xl">{subtitle}</p>
             </div>
 
-            {actions ? <div className="app-header-actions">{actions}</div> : null}
+            <div className="app-header-actions">
+              <div className="status-pill hidden max-w-[18rem] truncate sm:inline-flex">
+                {loading ? "Carregando perfil..." : user ? `${user.name} • ${roleLabel(user.role)}` : "Perfil indisponível"}
+              </div>
+              <GlobalSearch />
+              {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+            </div>
           </header>
 
           <div className="app-page-body">{children}</div>
