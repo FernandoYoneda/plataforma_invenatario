@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import BrandLogo from "./BrandLogo";
 import LogoutButton from "./LogoutButton";
 import { useAuth } from "./AuthProvider";
-import { canManageReferences, roleLabel } from "@/lib/permissions";
+import { canManageReferences, canManageUsers, roleLabel } from "@/lib/permissions";
 
 export type NavKey =
   | "dashboard"
@@ -14,7 +14,8 @@ export type NavKey =
   | "categories"
   | "locations"
   | "reports"
-  | "audit";
+  | "audit"
+  | "users";
 
 function DashboardIcon() {
   return (
@@ -90,6 +91,17 @@ function AuditIcon() {
   );
 }
 
+function UsersIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+      <path d="M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+      <path d="M20 8v6" />
+      <path d="M23 11h-6" />
+    </svg>
+  );
+}
+
 const mainItems: Array<{
   key: NavKey;
   href: string;
@@ -103,6 +115,7 @@ const mainItems: Array<{
   { key: "locations", href: "/locations", label: "Localizações", icon: <LocationsIcon /> },
   { key: "reports", href: "/reports", label: "Relatórios", icon: <ReportsIcon /> },
   { key: "audit", href: "/audit", label: "Auditoria", icon: <AuditIcon /> },
+  { key: "users", href: "/users", label: "Usuários", icon: <UsersIcon /> },
 ];
 
 const futureItems: Array<{ label: string; icon: ReactNode }> = [];
@@ -135,6 +148,10 @@ export default function AppNavigation({
   const visibleMainItems = mainItems.filter((item) => {
     if (item.key === "categories" || item.key === "locations") {
       return canManageReferences(user?.role);
+    }
+
+    if (item.key === "users") {
+      return canManageUsers(user?.role);
     }
 
     return true;

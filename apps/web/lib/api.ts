@@ -15,6 +15,7 @@ import type {
   Location,
   ReturnAssignmentInput,
   AssetImportResult,
+  SystemUser,
   UpdateAssetInput,
 } from "./types";
 
@@ -136,6 +137,71 @@ export async function login(payload: {
 export async function getCurrentUser(token?: string | null) {
   return request<AuthUser>("/auth/me", {
     method: "GET",
+    token,
+  });
+}
+
+export async function getUsers(
+  token?: string | null,
+  status: "active" | "inactive" | "all" = "active",
+) {
+  const suffix = status === "active" ? "?status=active" : `?status=${status}`;
+
+  return request<SystemUser[]>(`/users${suffix}`, {
+    method: "GET",
+    token,
+  });
+}
+
+export async function createUser(
+  payload: {
+    name: string;
+    email: string;
+    password: string;
+    role: SystemUser["role"];
+  },
+  token?: string | null,
+) {
+  return request<SystemUser>("/users", {
+    method: "POST",
+    body: payload,
+    token,
+  });
+}
+
+export async function updateUser(
+  userId: string,
+  payload: {
+    name?: string;
+    role?: SystemUser["role"];
+  },
+  token?: string | null,
+) {
+  return request<SystemUser>(`/users/${userId}`, {
+    method: "PATCH",
+    body: payload,
+    token,
+  });
+}
+
+export async function inactivateUser(
+  userId: string,
+  token?: string | null,
+) {
+  return request<SystemUser>(`/users/${userId}/inactivate`, {
+    method: "PATCH",
+    token,
+  });
+}
+
+export async function resetUserPassword(
+  userId: string,
+  payload: { password: string },
+  token?: string | null,
+) {
+  return request<SystemUser>(`/users/${userId}/reset-password`, {
+    method: "PATCH",
+    body: payload,
     token,
   });
 }

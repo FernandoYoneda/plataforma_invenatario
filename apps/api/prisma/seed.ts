@@ -41,6 +41,7 @@ async function main() {
       email: adminEmail,
       passwordHash,
       role: Role.ADMIN,
+      isActive: true,
     },
   });
 

@@ -173,6 +173,17 @@ export type AuthUser = {
   name: string;
   email: string;
   role: "ADMIN" | "TI" | "GESTOR" | "LEITURA" | "OPERADOR" | "CONSULTA";
+  isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type SystemUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: "ADMIN" | "TI" | "GESTOR" | "LEITURA" | "OPERADOR" | "CONSULTA";
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 };

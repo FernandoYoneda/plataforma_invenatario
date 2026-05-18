@@ -15,7 +15,7 @@ export class AuthService {
       where: { email: email.trim().toLowerCase() },
     });
 
-    if (!user) {
+    if (!user || !user.isActive) {
       throw new UnauthorizedException('Credenciais invalidas');
     }
 
@@ -39,7 +39,7 @@ export class AuthService {
       where: { id: userId },
     });
 
-    if (!user) {
+    if (!user || !user.isActive) {
       throw new UnauthorizedException('Usuario nao encontrado');
     }
 

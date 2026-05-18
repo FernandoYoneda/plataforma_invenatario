@@ -42,6 +42,10 @@ export function canManageAssets(role?: string | null) {
   return normalized === "ADMIN" || normalized === "TI";
 }
 
+export function canManageUsers(role?: string | null) {
+  return normalizeRole(role) === "ADMIN";
+}
+
 export function canManageEmployees(role?: string | null) {
   const normalized = normalizeRole(role);
   return normalized === "ADMIN" || normalized === "TI";
@@ -70,4 +74,3 @@ export function canExportReports(role?: string | null) {
     normalized === "GESTOR"
   );
 }
-
