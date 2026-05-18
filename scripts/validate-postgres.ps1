@@ -2,7 +2,6 @@
 param(
   [string]$ContainerName = "inventario_db",
   [string]$EnvFile,
-  [string]$BackupDir,
   [string]$DbUser,
   [string]$DbName
 )
@@ -68,10 +67,6 @@ if (!$EnvFile) {
   $EnvFile = Join-Path $PSScriptRoot "..\.env"
 }
 
-if (!$BackupDir) {
-  $BackupDir = Join-Path $PSScriptRoot "..\backups"
-}
-
 if (!(Get-Command docker -ErrorAction SilentlyContinue)) {
   throw "Docker nao encontrado no PATH."
 }
@@ -93,24 +88,11 @@ if (!$DbName) {
 Assert-RequiredValue -Name "POSTGRES_USER" -Value $DbUser -Source $EnvFile
 Assert-RequiredValue -Name "POSTGRES_DB" -Value $DbName -Source $EnvFile
 
-$backupDirPath = [System.IO.Path]::GetFullPath($BackupDir)
-New-Item -ItemType Directory -Path $backupDirPath -Force | Out-Null
+Write-Host "Validando conexao PostgreSQL no container '$ContainerName'..."
+& docker exec $ContainerName pg_isready -U $DbUser -d $DbName
+Assert-LastExitCode -Step "pg_isready"
 
-$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$safeDbName = $DbName -replace '[^a-zA-Z0-9_.-]', '_'
-$fileName = "$safeDbName-$timestamp.dump"
-$backupPath = Join-Path $backupDirPath $fileName
-$containerPath = "/tmp/$fileName"
+& docker exec $ContainerName psql -U $DbUser -d $DbName -c "select 1;" | Out-Null
+Assert-LastExitCode -Step "teste de consulta PostgreSQL"
 
-Write-Host "Gerando backup do banco '$DbName' no container '$ContainerName'..."
-& docker exec $ContainerName pg_dump -U $DbUser -d $DbName -F c -f $containerPath
-Assert-LastExitCode -Step "pg_dump"
-
-try {
-  & docker cp "${ContainerName}:$containerPath" $backupPath
-  Assert-LastExitCode -Step "docker cp"
-} finally {
-  & docker exec $ContainerName rm -f $containerPath | Out-Null
-}
-
-Write-Host "Backup salvo em: $backupPath"
+Write-Host "Conexao PostgreSQL validada com sucesso."

@@ -316,7 +316,7 @@ export default function GlobalSearch() {
   const open = focused && query.trim().length > 0;
 
   return (
-    <div ref={wrapperRef} className="relative w-full max-w-[34rem]">
+    <div ref={wrapperRef} className="global-search-shell">
       <label className="flex min-h-[3rem] items-center gap-2 rounded-[1.1rem] border border-[var(--border-soft)] bg-[var(--surface-card)] px-3.5 shadow-[0_10px_30px_rgba(23,58,67,0.08)] transition focus-within:border-[var(--brand-teal-700)]">
         <SearchIcon />
         <input

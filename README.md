@@ -2,6 +2,12 @@
 
 MVP para controle interno de ativos de TI, com cadastro de ativos, funcionarios, categorias, localizacoes, atribuicoes, relatorios e auditoria basica.
 
+## Documentação
+
+- [Instalação e operação](./docs/INSTALL.md)
+- [Mobile e PWA](./docs/MOBILE.md)
+- [Troubleshooting](./docs/TROUBLESHOOTING.md)
+
 ## Estrutura
 
 - `apps/api`: API NestJS com Prisma e PostgreSQL.
@@ -64,6 +70,97 @@ No `apps/api/.env` usado fora do Docker, `DATABASE_URL` normalmente aponta para 
 Usado pelo frontend:
 
 - `NEXT_PUBLIC_API_URL`
+
+## Checklist de produção interna
+
+Use esta sequência mínima antes de colocar o sistema em uso interno. A ordem abaixo evita subir ambiente com segredos padrão ou banco sem preparo.
+
+1. Configure os arquivos de ambiente reais:
+
+```powershell
+Copy-Item .env.example .env
+Copy-Item apps/api/.env.example apps/api/.env
+Copy-Item apps/web/.env.example apps/web/.env.local
+```
+
+2. Troque os valores padrão antes de subir qualquer serviço:
+
+- `JWT_SECRET`
+- senha do PostgreSQL
+- senha do pgAdmin
+- senha do admin inicial do seed
+
+3. Revise as URLs e portas:
+
+- `DATABASE_URL` da raiz deve apontar para o container `db`
+- `CORS_ORIGIN` deve conter as origens reais do ambiente
+- `NEXT_PUBLIC_API_URL` deve apontar para a API correta
+
+4. Suba o Docker com os serviços base:
+
+```powershell
+docker compose up -d db pgadmin
+```
+
+5. Rode as migrations sem resetar o banco:
+
+```powershell
+docker compose run --rm api npx prisma migrate deploy
+```
+
+6. Rode o seed inicial:
+
+```powershell
+docker compose run --rm api npx prisma db seed
+```
+
+7. Suba API e Web:
+
+```powershell
+docker compose up -d api web
+```
+
+8. Crie usuários reais no painel `/users` e substitua o uso do admin inicial do seed sempre que possível.
+
+9. Teste as permissões com perfis diferentes:
+
+- `ADMIN`
+- `TI`
+- `GESTOR`
+- `LEITURA`
+
+10. Teste o fluxo operacional antes de liberar o acesso:
+
+- login
+- dashboard
+- ativos
+- funcionários
+- auditoria
+- relatórios
+- QR Code
+- anexos e uploads
+- mobile e PWA
+
+11. Gere um backup e valide restore em modo DryRun:
+
+```powershell
+.\scripts\backup-db.ps1
+.\scripts\restore-db.ps1 -BackupFile .\backups\inventario_ti-AAAA-MM-DD-HHMMSS.dump -DryRun
+```
+
+12. Se o DryRun estiver correto, execute o restore real em janela controlada. Nunca use `prisma migrate reset` em ambiente com dados.
+
+### Comandos principais em PowerShell
+
+```powershell
+docker compose up -d
+docker compose run --rm api npx prisma migrate deploy
+docker compose run --rm api npx prisma db seed
+docker compose logs -f api
+docker compose logs -f web
+.\scripts\backup-db.ps1
+.\scripts\restore-db.ps1 -BackupFile .\backups\inventario_ti-AAAA-MM-DD-HHMMSS.dump -DryRun
+```
 
 ## Subir banco
 
@@ -132,32 +229,63 @@ Rotas de upload e exclusao sao restritas a usuarios `ADMIN`. Consulta e download
 
 ## Backup e restore do banco
 
-Os scripts usam o container Postgres `inventario_db` e leem `POSTGRES_USER` e `POSTGRES_DB` do `.env` da raiz. Os arquivos de backup sao salvos em `backups/`, pasta ignorada pelo Git.
+Os scripts usam o container Postgres `inventario_db` e leem `POSTGRES_USER` e `POSTGRES_DB` do `.env` da raiz. Os arquivos de backup sao salvos por padrao em `backups/`, pasta ignorada pelo Git.
 
-Gerar backup:
+### Backup manual
 
 ```powershell
 .\scripts\backup-db.ps1
 ```
 
-O arquivo gerado usa data e hora no nome, por exemplo `backups/inventario_ti-20260512-143000.dump`.
+O nome segue o padrao `<banco>-YYYYMMDD-HHMMSS.dump`, por exemplo `inventario_ti-20260512-143000.dump`.
 
-Validar um restore sem alterar dados:
+### Restore
+
+Validar o arquivo sem alterar dados:
 
 ```powershell
 .\scripts\restore-db.ps1 -BackupFile .\backups\inventario_ti-20260512-143000.dump -DryRun
 ```
 
-Restaurar backup:
+Restore real com confirmacao interativa:
 
 ```powershell
 .\scripts\restore-db.ps1 -BackupFile .\backups\inventario_ti-20260512-143000.dump -Force
 ```
 
-Atencao: restore pode sobrescrever dados do banco atual. Antes de restaurar, gere um backup novo e pare API/Web se quiser evitar escritas durante a operacao:
+O script pede para digitar `RESTAURAR` antes de sobrescrever o banco. Se a entrada nao bater, a operacao eh cancelada.
+
+### Restore emergencial
+
+1. Gere um backup novo antes de qualquer tentativa de restauracao.
+2. Pare a API e o frontend se precisar evitar escritas durante a janela:
 
 ```powershell
-docker-compose stop api web
+docker compose stop api web
+```
+
+3. Execute primeiro o `DryRun`.
+4. Se o `DryRun` estiver ok, rode o restore real com `-Force`.
+5. Suba a API e o frontend novamente.
+
+### Checklist pos-restore
+
+- Conferir se a API responde na rota raiz.
+- Logar com um usuario real.
+- Validar dashboard, ativos, funcionarios e auditoria.
+- Testar QR Code.
+- Testar anexos e uploads.
+- Validar acesso mobile/PWA.
+- Checar se o arquivo restaurado corresponde ao backup esperado.
+
+### Scripts operacionais
+
+```powershell
+.\scripts\healthcheck.ps1
+.\scripts\validate-postgres.ps1
+.\scripts\validate-api.ps1
+.\scripts\backup-db.ps1
+.\scripts\restore-db.ps1 -BackupFile .\backups\inventario_ti-YYYYMMDD-HHMMSS.dump -DryRun
 ```
 
 ## Rodar migrations

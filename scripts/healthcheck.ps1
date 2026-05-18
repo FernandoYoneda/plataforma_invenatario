@@ -1,10 +1,8 @@
 [CmdletBinding()]
 param(
-  [string]$ContainerName = "inventario_db",
   [string]$EnvFile,
   [string]$BackupDir,
-  [string]$DbUser,
-  [string]$DbName
+  [string]$UploadDir
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,23 +51,16 @@ function Assert-RequiredValue {
   }
 }
 
-function Assert-LastExitCode {
-  param(
-    [string]$Step,
-    [int]$Code = $LASTEXITCODE
-  )
-
-  if ($Code -ne 0) {
-    throw "$Step falhou com exit code $Code."
-  }
-}
-
 if (!$EnvFile) {
   $EnvFile = Join-Path $PSScriptRoot "..\.env"
 }
 
 if (!$BackupDir) {
   $BackupDir = Join-Path $PSScriptRoot "..\backups"
+}
+
+if (!$UploadDir) {
+  $UploadDir = Join-Path $PSScriptRoot "..\uploads\assets"
 }
 
 if (!(Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -82,35 +73,19 @@ if (!(Test-Path -LiteralPath $EnvFile)) {
 
 $envValues = Read-EnvFile -Path $EnvFile
 
-if (!$DbUser) {
-  $DbUser = $envValues["POSTGRES_USER"]
-}
-
-if (!$DbName) {
-  $DbName = $envValues["POSTGRES_DB"]
-}
-
-Assert-RequiredValue -Name "POSTGRES_USER" -Value $DbUser -Source $EnvFile
-Assert-RequiredValue -Name "POSTGRES_DB" -Value $DbName -Source $EnvFile
+Assert-RequiredValue -Name "POSTGRES_USER" -Value $envValues["POSTGRES_USER"] -Source $EnvFile
+Assert-RequiredValue -Name "POSTGRES_PASSWORD" -Value $envValues["POSTGRES_PASSWORD"] -Source $EnvFile
+Assert-RequiredValue -Name "POSTGRES_DB" -Value $envValues["POSTGRES_DB"] -Source $EnvFile
+Assert-RequiredValue -Name "JWT_SECRET" -Value $envValues["JWT_SECRET"] -Source $EnvFile
+Assert-RequiredValue -Name "NEXT_PUBLIC_API_URL" -Value $envValues["NEXT_PUBLIC_API_URL"] -Source $EnvFile
 
 $backupDirPath = [System.IO.Path]::GetFullPath($BackupDir)
+$uploadDirPath = [System.IO.Path]::GetFullPath($UploadDir)
+
 New-Item -ItemType Directory -Path $backupDirPath -Force | Out-Null
+New-Item -ItemType Directory -Path $uploadDirPath -Force | Out-Null
 
-$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$safeDbName = $DbName -replace '[^a-zA-Z0-9_.-]', '_'
-$fileName = "$safeDbName-$timestamp.dump"
-$backupPath = Join-Path $backupDirPath $fileName
-$containerPath = "/tmp/$fileName"
-
-Write-Host "Gerando backup do banco '$DbName' no container '$ContainerName'..."
-& docker exec $ContainerName pg_dump -U $DbUser -d $DbName -F c -f $containerPath
-Assert-LastExitCode -Step "pg_dump"
-
-try {
-  & docker cp "${ContainerName}:$containerPath" $backupPath
-  Assert-LastExitCode -Step "docker cp"
-} finally {
-  & docker exec $ContainerName rm -f $containerPath | Out-Null
-}
-
-Write-Host "Backup salvo em: $backupPath"
+Write-Host "Healthcheck operacional concluido."
+Write-Host "Backup: $backupDirPath"
+Write-Host "Uploads: $uploadDirPath"
+Write-Host "Variaveis de ambiente: OK"

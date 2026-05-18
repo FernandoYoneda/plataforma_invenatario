@@ -12,10 +12,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if (!$EnvFile) {
-  $EnvFile = Join-Path $PSScriptRoot "..\.env"
-}
-
 function Read-EnvFile {
   param([string]$Path)
 
@@ -48,6 +44,18 @@ function Read-EnvFile {
   return $values
 }
 
+function Assert-RequiredValue {
+  param(
+    [string]$Name,
+    [string]$Value,
+    [string]$Source
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    throw "Informe $Name ou defina a variavel correspondente no arquivo .env ($Source)."
+  }
+}
+
 function Assert-LastExitCode {
   param(
     [string]$Step,
@@ -59,8 +67,16 @@ function Assert-LastExitCode {
   }
 }
 
+if (!$EnvFile) {
+  $EnvFile = Join-Path $PSScriptRoot "..\.env"
+}
+
 if (!(Get-Command docker -ErrorAction SilentlyContinue)) {
   throw "Docker nao encontrado no PATH."
+}
+
+if (!(Test-Path -LiteralPath $EnvFile)) {
+  throw "Arquivo de ambiente nao encontrado: $EnvFile"
 }
 
 $envValues = Read-EnvFile -Path $EnvFile
@@ -73,13 +89,8 @@ if (!$DbName) {
   $DbName = $envValues["POSTGRES_DB"]
 }
 
-if (!$DbUser) {
-  throw "Informe -DbUser ou defina POSTGRES_USER no arquivo .env."
-}
-
-if (!$DbName) {
-  throw "Informe -DbName ou defina POSTGRES_DB no arquivo .env."
-}
+Assert-RequiredValue -Name "POSTGRES_USER" -Value $DbUser -Source $EnvFile
+Assert-RequiredValue -Name "POSTGRES_DB" -Value $DbName -Source $EnvFile
 
 if (!(Test-Path -LiteralPath $BackupFile)) {
   throw "Arquivo de backup nao encontrado: $BackupFile"
@@ -94,6 +105,14 @@ if ($DryRun) {
   Write-Host "Container: $ContainerName"
   Write-Host "Banco: $DbName"
   Write-Host "Arquivo: $backupPath"
+  & docker cp $backupPath "${ContainerName}:$containerPath"
+  Assert-LastExitCode -Step "docker cp"
+  try {
+    & docker exec $ContainerName pg_restore --list $containerPath | Out-Null
+    Assert-LastExitCode -Step "pg_restore --list"
+  } finally {
+    & docker exec $ContainerName rm -f $containerPath | Out-Null
+  }
   & docker exec $ContainerName pg_restore --version
   Assert-LastExitCode -Step "pg_restore --version"
   & docker exec $ContainerName psql -U $DbUser -d $DbName -c "select 1;" | Out-Null
@@ -104,6 +123,11 @@ if ($DryRun) {
 
 if (!$Force) {
   throw "Restore sobrescreve dados do banco '$DbName'. Reexecute com -Force para confirmar ou use -DryRun para validar."
+}
+
+$confirmation = Read-Host "Digite RESTAURAR para confirmar o restore real"
+if ($confirmation -ne "RESTAURAR") {
+  throw "Restore cancelado pelo usuario."
 }
 
 Write-Host "Copiando backup para o container '$ContainerName'..."
