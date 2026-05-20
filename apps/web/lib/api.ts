@@ -328,6 +328,16 @@ export async function createCategory(
   });
 }
 
+export async function deleteCategory(
+  categoryId: string,
+  token?: string | null,
+) {
+  return request<{ ok: boolean }>(`/categories/${categoryId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
 export async function getLocations(token?: string | null) {
   return request<Location[]>("/locations", {
     method: "GET",
@@ -342,6 +352,16 @@ export async function createLocation(
   return request<Location>("/locations", {
     method: "POST",
     body: payload,
+    token,
+  });
+}
+
+export async function deleteLocation(
+  locationId: string,
+  token?: string | null,
+) {
+  return request<{ ok: boolean }>(`/locations/${locationId}`, {
+    method: "DELETE",
     token,
   });
 }

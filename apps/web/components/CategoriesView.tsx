@@ -1,6 +1,6 @@
 "use client";
 
-import { createCategory, getCategories } from "@/lib/api";
+import { createCategory, deleteCategory, getCategories } from "@/lib/api";
 import type { Category } from "@/lib/types";
 import ReferenceDataView from "./ReferenceDataView";
 
@@ -21,6 +21,7 @@ export default function CategoriesView() {
       descriptionPlaceholder="Descricao opcional da categoria."
       getItems={getCategories}
       createItem={createCategory}
+      deleteItem={deleteCategory}
     />
   );
 }

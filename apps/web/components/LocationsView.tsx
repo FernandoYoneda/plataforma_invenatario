@@ -1,6 +1,6 @@
 "use client";
 
-import { createLocation, getLocations } from "@/lib/api";
+import { createLocation, deleteLocation, getLocations } from "@/lib/api";
 import type { Location } from "@/lib/types";
 import ReferenceDataView from "./ReferenceDataView";
 
@@ -21,6 +21,7 @@ export default function LocationsView() {
       descriptionPlaceholder="Descricao opcional do local."
       getItems={getLocations}
       createItem={createLocation}
+      deleteItem={deleteLocation}
     />
   );
 }

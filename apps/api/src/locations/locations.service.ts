@@ -30,6 +30,12 @@ export class LocationsService {
     throw error;
   }
 
+  private handleDeleteDependencies() {
+    throw new ConflictException(
+      'Não é possível excluir. Existem ativos ou funcionários vinculados.',
+    );
+  }
+
   findAll() {
     return this.prisma.location.findMany({
       orderBy: { name: 'asc' },
@@ -71,6 +77,15 @@ export class LocationsService {
   async remove(id: string) {
     const exists = await this.prisma.location.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Local nao encontrado');
+
+    const [linkedAssets, linkedEmployees] = await Promise.all([
+      this.prisma.asset.count({ where: { locationId: id } }),
+      this.prisma.employee.count({ where: { locationId: id } }),
+    ]);
+
+    if (linkedAssets > 0 || linkedEmployees > 0) {
+      this.handleDeleteDependencies();
+    }
 
     return this.prisma.location.delete({ where: { id } });
   }

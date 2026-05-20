@@ -30,6 +30,12 @@ export class CategoriesService {
     throw error;
   }
 
+  private handleDeleteDependencies() {
+    throw new ConflictException(
+      'Não é possível excluir. Existem ativos vinculados.',
+    );
+  }
+
   findAll() {
     return this.prisma.category.findMany({
       orderBy: { name: 'asc' },
@@ -71,6 +77,14 @@ export class CategoriesService {
   async remove(id: string) {
     const exists = await this.prisma.category.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Categoria nao encontrada');
+
+    const linkedAssets = await this.prisma.asset.count({
+      where: { categoryId: id },
+    });
+
+    if (linkedAssets > 0) {
+      this.handleDeleteDependencies();
+    }
 
     return this.prisma.category.delete({ where: { id } });
   }
