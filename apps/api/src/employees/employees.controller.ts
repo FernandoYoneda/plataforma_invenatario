@@ -61,6 +61,12 @@ export class EmployeesController {
     return this.employeesService.inactivate(id, req.user?.id);
   }
 
+  @Patch(':id/activate')
+  @Roles(Role.ADMIN, Role.TI)
+  activate(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.employeesService.activate(id, req.user?.id);
+  }
+
   @Delete(':id')
   @Roles(Role.ADMIN, Role.TI)
   remove(@Param('id') id: string, @Req() req: AuthenticatedRequest) {

@@ -280,4 +280,40 @@ export class EmployeesService {
       this.handlePrismaError(error);
     }
   }
+
+  async activate(id: string, userId?: string | null) {
+    const exists = await this.prisma.employee.findUnique({
+      where: { id },
+      include: {
+        location: true,
+      },
+    });
+    if (!exists) throw new NotFoundException('Funcionario nao encontrado');
+
+    if (exists.isActive) {
+      return exists;
+    }
+
+    try {
+      const employee = await this.prisma.employee.update({
+        where: { id },
+        data: { isActive: true },
+        include: {
+          location: true,
+        },
+      });
+
+      await this.auditLogs?.create({
+        action: 'EMPLOYEE_ACTIVATED',
+        entityType: 'Employee',
+        entityId: employee.id,
+        description: `Funcionário ${employee.name} reativado`,
+        userId,
+      });
+
+      return employee;
+    } catch (error) {
+      this.handlePrismaError(error);
+    }
+  }
 }

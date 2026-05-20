@@ -310,6 +310,16 @@ export async function inactivateEmployee(
   });
 }
 
+export async function activateEmployee(
+  employeeId: string,
+  token?: string | null,
+) {
+  return request<Employee>(`/employees/${employeeId}/activate`, {
+    method: "PATCH",
+    token,
+  });
+}
+
 export async function getCategories(token?: string | null) {
   return request<Category[]>("/categories", {
     method: "GET",

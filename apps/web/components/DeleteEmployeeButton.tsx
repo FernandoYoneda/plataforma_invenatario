@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import {
+  activateEmployee,
+  inactivateEmployee,
+} from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
-import { inactivateEmployee } from "@/lib/api";
 import { canManageEmployees } from "@/lib/permissions";
 import type { Employee } from "@/lib/types";
 import { useAuth } from "./AuthProvider";
@@ -14,7 +17,7 @@ export default function DeleteEmployeeButton({
   onDeleted,
 }: {
   employee: Employee;
-  onDeleted: (employeeId: string) => void;
+  onDeleted: (employee: Employee) => void;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -66,7 +69,7 @@ export default function DeleteEmployeeButton({
     };
   }, [open]);
 
-  async function handleDelete() {
+  async function handleToggle() {
     const token = getAuthToken();
 
     if (!token) {
@@ -78,9 +81,16 @@ export default function DeleteEmployeeButton({
     setLoading(true);
 
     try {
-      await inactivateEmployee(employee.id, token);
-      toast.success("Funcionário inativado com sucesso.");
-      onDeleted(employee.id);
+      const updated = employee.isActive
+        ? await inactivateEmployee(employee.id, token)
+        : await activateEmployee(employee.id, token);
+
+      toast.success(
+        employee.isActive
+          ? "Funcionário inativado com sucesso."
+          : "Funcionário reativado com sucesso.",
+      );
+      onDeleted(updated);
       setOpen(false);
     } catch (err: unknown) {
       if (handleAuthError(err)) {
@@ -88,7 +98,11 @@ export default function DeleteEmployeeButton({
       }
 
       const rawMessage =
-        err instanceof Error ? err.message : "Não foi possível inativar o funcionário.";
+        err instanceof Error
+          ? err.message
+          : employee.isActive
+            ? "Não foi possível inativar o funcionário."
+            : "Não foi possível reativar o funcionário.";
 
       const message = rawMessage.toLowerCase().includes("ativos atribu")
         ? "Funcionário possui ativos atribuídos. Devolva os ativos antes de inativar."
@@ -109,9 +123,13 @@ export default function DeleteEmployeeButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="action-button border-rose-200 bg-rose-50/90 text-rose-700 hover:bg-rose-100"
+        className={
+          employee.isActive
+            ? "action-button border-rose-200 bg-rose-50/90 text-rose-700 hover:bg-rose-100"
+            : "action-button border-emerald-200 bg-emerald-50/90 text-emerald-700 hover:bg-emerald-100"
+        }
       >
-        Inativar
+        {employee.isActive ? "Inativar" : "Reativar"}
       </button>
 
       {open && (
@@ -126,13 +144,14 @@ export default function DeleteEmployeeButton({
               <div className="border-b px-6 py-5 [border-color:var(--border-soft)]">
                 <p className="eyebrow">Confirmacao</p>
                 <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
-                  Inativar funcionário
+                  {employee.isActive ? "Inativar funcionário" : "Reativar funcionário"}
                 </h2>
               </div>
 
               <div className="px-6 py-5 text-sm [color:var(--text-secondary)]">
                 <p>
-                  Voce tem certeza que deseja inativar{" "}
+                  Voce tem certeza que deseja{" "}
+                  {employee.isActive ? "inativar" : "reativar"}{" "}
                   <span className="font-medium [color:var(--text-primary)]">
                     {employee.name}
                   </span>
@@ -155,11 +174,21 @@ export default function DeleteEmployeeButton({
 
                 <button
                   type="button"
-                  onClick={handleDelete}
+                  onClick={handleToggle}
                   disabled={loading}
-                  className="btn-danger px-5 py-3 text-sm disabled:opacity-60"
+                  className={
+                    employee.isActive
+                      ? "btn-danger px-5 py-3 text-sm disabled:opacity-60"
+                      : "btn-primary px-5 py-3 text-sm disabled:opacity-60"
+                  }
                 >
-                  {loading ? "Inativando..." : "Inativar"}
+                  {loading
+                    ? employee.isActive
+                      ? "Inativando..."
+                      : "Reativando..."
+                    : employee.isActive
+                      ? "Inativar"
+                      : "Reativar"}
                 </button>
               </div>
             </div>

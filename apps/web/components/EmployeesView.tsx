@@ -45,6 +45,30 @@ export default function EmployeesView() {
     setError(null);
   }
 
+  function handleEmployeeStatusChanged(updatedEmployee: Employee) {
+    setEmployees((current) => {
+      const next = [...current].map((item) =>
+        item.id === updatedEmployee.id ? updatedEmployee : item,
+      );
+
+      if (filter === "active") {
+        return next
+          .filter((item) => item.isActive)
+          .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+      }
+
+      if (filter === "inactive") {
+        return next
+          .filter((item) => !item.isActive)
+          .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+      }
+
+      return next.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    });
+
+    setError(null);
+  }
+
   function handleAuthError(err: unknown) {
     if (
       err instanceof Error &&
@@ -205,18 +229,7 @@ export default function EmployeesView() {
                           <EmployeeAssignmentsModal employee={employee} />
                           <DeleteEmployeeButton
                             employee={employee}
-                            onDeleted={(employeeId) => {
-                              setEmployees((current) =>
-                                filter === "all"
-                                  ? current.map((item) =>
-                                      item.id === employeeId
-                                        ? { ...item, isActive: false }
-                                        : item,
-                                    )
-                                  : current.filter((item) => item.id !== employeeId),
-                              );
-                              setError(null);
-                            }}
+                            onDeleted={handleEmployeeStatusChanged}
                           />
                         </div>
                       ) : (
@@ -230,6 +243,10 @@ export default function EmployeesView() {
                           <EditEmployeeModal
                             employee={employee}
                             onUpdated={handleEmployeeUpdated}
+                          />
+                          <DeleteEmployeeButton
+                            employee={employee}
+                            onDeleted={handleEmployeeStatusChanged}
                           />
                         </div>
                       )}
