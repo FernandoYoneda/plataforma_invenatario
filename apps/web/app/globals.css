@@ -430,6 +430,68 @@ body {
     color: var(--text-secondary);
   }
 
+  .asset-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.9rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .asset-status-badge-info {
+    background: rgba(72, 113, 171, 0.12);
+    color: #2f5f91;
+    border-color: rgba(72, 113, 171, 0.18);
+  }
+
+  .asset-status-badge-success {
+    background: rgba(52, 128, 95, 0.12);
+    color: #2f6f55;
+    border-color: rgba(52, 128, 95, 0.18);
+  }
+
+  .asset-status-badge-warning {
+    background: rgba(204, 145, 43, 0.14);
+    color: #8b5d15;
+    border-color: rgba(204, 145, 43, 0.22);
+  }
+
+  .asset-status-badge-danger {
+    background: rgba(194, 79, 74, 0.12);
+    color: #9d3b39;
+    border-color: rgba(194, 79, 74, 0.18);
+  }
+
+  [data-theme="dark"] .asset-status-badge-info {
+    background: rgba(89, 132, 181, 0.18);
+    color: #d2e6ff;
+    border-color: rgba(89, 132, 181, 0.22);
+  }
+
+  [data-theme="dark"] .asset-status-badge-success {
+    background: rgba(69, 144, 105, 0.18);
+    color: #d7f0de;
+    border-color: rgba(69, 144, 105, 0.22);
+  }
+
+  [data-theme="dark"] .asset-status-badge-warning {
+    background: rgba(193, 145, 54, 0.18);
+    color: #f4d9a0;
+    border-color: rgba(193, 145, 54, 0.24);
+  }
+
+  [data-theme="dark"] .asset-status-badge-danger {
+    background: rgba(189, 79, 73, 0.18);
+    color: #f1c6c3;
+    border-color: rgba(189, 79, 73, 0.24);
+  }
+
   .data-table {
     width: 100%;
     min-width: 100%;
@@ -655,7 +717,7 @@ body {
   }
 
   .app-brand-logo-image {
-    width: min(13.75rem, 100%);
+    width: min(12.5rem, 100%);
     height: auto;
     max-height: 3.35rem;
   }
@@ -967,8 +1029,8 @@ body {
   }
 
   .asset-actions-column {
-    min-width: 22rem;
-    width: 22rem;
+    min-width: 10rem;
+    width: 10rem;
   }
 
   .asset-actions-row {
@@ -983,6 +1045,56 @@ body {
     flex: 0 0 auto;
     min-height: 2.35rem;
     padding: 0.5rem 0.66rem;
+    white-space: nowrap;
+  }
+
+  .asset-actions-menu {
+    position: relative;
+    display: inline-flex;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .asset-actions-menu-trigger {
+    width: 100%;
+    min-width: 5.75rem;
+    height: 2.35rem;
+    justify-content: center;
+    padding: 0.35rem 0.6rem;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .asset-actions-menu-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.5rem);
+    z-index: 30;
+    display: flex;
+    min-width: 13rem;
+    max-width: min(15rem, calc(100vw - 1.5rem));
+    flex-direction: column;
+    gap: 0.35rem;
+    border-radius: 1rem;
+    border: 1px solid var(--border-soft);
+    background: rgba(255, 255, 255, 0.96);
+    padding: 0.6rem;
+    box-shadow: 0 18px 40px rgba(23, 58, 67, 0.16);
+    backdrop-filter: blur(14px);
+  }
+
+  [data-theme="dark"] .asset-actions-menu-panel {
+    border-color: rgba(242, 236, 229, 0.14);
+    background: rgba(11, 26, 31, 0.98);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .asset-actions-menu-item {
+    width: 100%;
+    justify-content: flex-start;
+    min-height: 2.35rem;
+    padding: 0.55rem 0.75rem;
     white-space: nowrap;
   }
 
@@ -1132,8 +1244,8 @@ body {
   }
 
   .asset-actions-column {
-    min-width: 27rem;
-    width: 27rem;
+    min-width: 10rem;
+    width: 10rem;
   }
 
   .app-header {
@@ -1173,8 +1285,8 @@ body {
   }
 
   .asset-actions-column {
-    min-width: 22rem;
-    width: 22rem;
+    min-width: 9rem;
+    width: 9rem;
   }
 }
 
@@ -1243,8 +1355,8 @@ body {
   }
 
   .asset-actions-column {
-    min-width: 18.5rem;
-    width: 18.5rem;
+    min-width: 8rem;
+    width: 8rem;
   }
 
   .asset-actions-row {

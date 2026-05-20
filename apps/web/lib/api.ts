@@ -17,6 +17,7 @@ import type {
   AssetImportResult,
   SystemUser,
   UpdateAssetInput,
+  UpdateEmployeeInput,
 } from "./types";
 
 const API_BASE_URL = (
@@ -194,6 +195,16 @@ export async function inactivateUser(
   });
 }
 
+export async function activateUser(
+  userId: string,
+  token?: string | null,
+) {
+  return request<SystemUser>(`/users/${userId}/activate`, {
+    method: "PATCH",
+    token,
+  });
+}
+
 export async function resetUserPassword(
   userId: string,
   payload: { password: string },
@@ -272,6 +283,18 @@ export async function createEmployee(
 ) {
   return request<Employee>("/employees", {
     method: "POST",
+    body: payload,
+    token,
+  });
+}
+
+export async function updateEmployee(
+  employeeId: string,
+  payload: UpdateEmployeeInput,
+  token?: string | null,
+) {
+  return request<Employee>(`/employees/${employeeId}`, {
+    method: "PATCH",
     body: payload,
     token,
   });

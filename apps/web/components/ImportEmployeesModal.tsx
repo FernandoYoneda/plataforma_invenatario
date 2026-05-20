@@ -4,10 +4,10 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
-import { createEmployee } from "@/lib/api";
+import { createEmployee, getLocations } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { canManageEmployees } from "@/lib/permissions";
-import type { Employee } from "@/lib/types";
+import type { Employee, Location } from "@/lib/types";
 import { useAuth } from "./AuthProvider";
 
 type ImportedRow = {
@@ -20,6 +20,8 @@ type ValidatedRow = ImportedRow & {
   email: string;
   department: string;
   position: string;
+  location: string;
+  locationId: string;
   errors: string[];
   isValid: boolean;
 };
@@ -64,6 +66,7 @@ function downloadCsvTemplate() {
     "email",
     "departamento",
     "cargo",
+    "localizacao",
   ];
 
   const example = [
@@ -71,6 +74,7 @@ function downloadCsvTemplate() {
     "ana.souza@empresa.com",
     "TI",
     "Analista de Suporte",
+    "Matriz",
   ];
 
   const csv = [
@@ -154,6 +158,7 @@ function validateRows(preview: PreviewState, existingEmployees: Employee[]) {
   const emailHeader = findHeader(headers, ["email", "e-mail"]);
   const departmentHeader = findHeader(headers, ["departamento", "setor"]);
   const positionHeader = findHeader(headers, ["cargo", "posicao", "posição", "funcao", "função"]);
+  const locationHeader = findHeader(headers, ["localizacao", "localização", "local", "unidade"]);
 
   const existingEmails = new Set(
     existingEmployees.map((employee) => normalizeText(employee.email)),
@@ -166,6 +171,7 @@ function validateRows(preview: PreviewState, existingEmployees: Employee[]) {
     const email = valueByHeader(row, emailHeader);
     const department = valueByHeader(row, departmentHeader);
     const position = valueByHeader(row, positionHeader);
+    const location = valueByHeader(row, locationHeader);
     const normalizedEmail = normalizeText(email);
 
     if (!name.trim()) {
@@ -189,12 +195,18 @@ function validateRows(preview: PreviewState, existingEmployees: Employee[]) {
       seenEmails.add(normalizedEmail);
     }
 
+    if (!location.trim()) {
+      errors.push("Localização é obrigatória.");
+    }
+
     return {
       ...row,
       name,
       email,
       department,
       position,
+      location,
+      locationId: "",
       errors,
       isValid: errors.length === 0,
     };
@@ -217,6 +229,9 @@ export default function ImportEmployeesModal({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [loadingLocations, setLoadingLocations] = useState(false);
+  const [referencesError, setReferencesError] = useState<string | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
 
   useEffect(() => setMounted(true), []);
 
@@ -231,10 +246,73 @@ export default function ImportEmployeesModal({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    let active = true;
+
+    async function loadLocations() {
+      const token = getAuthToken();
+
+      if (!token) {
+        if (!active) return;
+        setReferencesError("Sessao expirada. Faca login novamente.");
+        setLocations([]);
+        return;
+      }
+
+      setLoadingLocations(true);
+      setReferencesError(null);
+
+      try {
+        const locationsData = await getLocations(token);
+        if (!active) return;
+        setLocations(locationsData);
+      } catch (err: unknown) {
+        if (!active) return;
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Nao foi possivel carregar as localizacoes.";
+        setReferencesError(message);
+        setLocations([]);
+      } finally {
+        if (active) setLoadingLocations(false);
+      }
+    }
+
+    loadLocations();
+
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
   const validatedRows = useMemo(() => {
     if (!preview) return [];
-    return validateRows(preview, employees);
-  }, [employees, preview]);
+    const nextRows = validateRows(preview, employees);
+
+    return nextRows.map((row) => {
+      const locationId =
+        locations.find(
+          (location) =>
+            normalizeText(location.name) === normalizeText(row.location),
+        )?.id ?? "";
+
+      const errors = [...row.errors];
+
+      if (!locationId) {
+        errors.push("Localização não encontrada na base.");
+      }
+
+      return {
+        ...row,
+        locationId,
+        errors,
+        isValid: errors.length === 0,
+      };
+    });
+  }, [employees, locations, preview]);
 
   const validCount = validatedRows.filter((row) => row.isValid).length;
   const invalidCount = validatedRows.length - validCount;
@@ -324,6 +402,7 @@ export default function ImportEmployeesModal({
               email: row.email.trim(),
               department: row.department.trim() || null,
               position: row.position.trim() || null,
+              locationId: row.locationId,
             },
             token,
           );
@@ -441,8 +520,19 @@ export default function ImportEmployeesModal({
                       O arquivo precisa ter uma linha de cabeçalho.
                     </p>
                     <p className="mt-2 text-xs [color:var(--text-secondary)]">
+                      Localização é obrigatória e deve existir no cadastro de locais.
+                    </p>
+                    <p className="mt-2 text-xs [color:var(--text-secondary)]">
                       {file ? `Arquivo selecionado: ${file.name}` : "Nenhum arquivo selecionado."}
                     </p>
+                    {loadingLocations ? (
+                      <div className="status-pill mt-3">Carregando localizações...</div>
+                    ) : null}
+                    {referencesError ? (
+                      <div className="status-banner-warning mt-3 rounded-[18px] px-3 py-2 text-xs">
+                        {referencesError}
+                      </div>
+                    ) : null}
                   </section>
 
                   {importResult ? (
@@ -516,6 +606,7 @@ export default function ImportEmployeesModal({
                             <th>Email</th>
                             <th>Departamento</th>
                             <th>Cargo</th>
+                            <th>Localização</th>
                             <th>Validação</th>
                           </tr>
                         </thead>
@@ -527,6 +618,7 @@ export default function ImportEmployeesModal({
                               <td>{row.email || "-"}</td>
                               <td>{row.department || "-"}</td>
                               <td>{row.position || "-"}</td>
+                              <td>{row.location || "-"}</td>
                               <td>
                                 {row.isValid ? (
                                   <span className="status-pill">OK</span>

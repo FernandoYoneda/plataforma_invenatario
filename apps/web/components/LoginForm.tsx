@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { login } from "@/lib/api";
 import { setAuthToken } from "@/lib/auth";
+import { useAuth } from "./AuthProvider";
 
 export default function LoginForm() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,6 +31,7 @@ export default function LoginForm() {
       });
 
       setAuthToken(response.accessToken);
+      refreshUser();
       toast.success("Login realizado com sucesso.");
       router.replace("/dashboard");
       router.refresh();

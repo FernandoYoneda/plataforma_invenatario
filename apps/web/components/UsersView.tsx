@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
+  activateUser,
   createUser,
   getUsers,
   inactivateUser,
@@ -193,6 +194,19 @@ export default function UsersView() {
     toast.success("Usuário inativado com sucesso.");
   }
 
+  async function handleActivate(userId: string) {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error("Sessão expirada. Faça login novamente.");
+    }
+
+    const updated = await activateUser(userId, token);
+    setUsers((current) =>
+      sortUsers(current.map((item) => (item.id === updated.id ? updated : item))),
+    );
+    toast.success("Usuário reativado com sucesso.");
+  }
+
   if (redirecting) {
     return (
       <AppShell
@@ -363,7 +377,31 @@ export default function UsersView() {
                           >
                             Inativar
                           </button>
-                        ) : null}
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (
+                                window.confirm(
+                                  `Reativar o usuário ${item.name}?`,
+                                )
+                              ) {
+                                try {
+                                  await handleActivate(item.id);
+                                } catch (err: unknown) {
+                                  const message =
+                                    err instanceof Error
+                                      ? err.message
+                                      : "Não foi possível reativar o usuário.";
+                                  setError(message);
+                                }
+                              }
+                            }}
+                            className="action-button border-emerald-200 bg-emerald-50/90 text-emerald-700 hover:bg-emerald-100"
+                          >
+                            Reativar
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

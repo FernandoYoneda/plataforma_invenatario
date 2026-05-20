@@ -1,5 +1,10 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 function trimString(value: unknown) {
   return typeof value === 'string' ? value.trim() : value;
@@ -24,4 +29,9 @@ export class CreateEmployeeDto {
   @Transform(({ value }) => trimString(value))
   @IsString()
   position?: string;
+
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @IsNotEmpty()
+  locationId?: string;
 }

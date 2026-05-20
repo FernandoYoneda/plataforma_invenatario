@@ -136,7 +136,7 @@ export default function AppNavigation({
   onThemeChange: (theme: "light" | "dark") => void;
 }) {
   const [mounted, setMounted] = useState(false);
-  const { user, loading } = useAuth();
+  const { user, loading, error } = useAuth();
 
   useEffect(() => {
     setMounted(true);
@@ -191,10 +191,16 @@ export default function AppNavigation({
           </div>
           <div className="mt-3 min-w-0">
             <div className="truncate text-sm font-semibold text-white/90">
-              {loading ? "Carregando perfil..." : user?.name ?? "Usuario"}
+              {loading
+                ? "Carregando perfil..."
+                : user?.name ?? "Usuario"}
             </div>
             <div className="mt-1 text-xs text-white/68">
-              {loading ? "Aguardando autenticacao..." : roleLabel(user?.role)}
+              {loading
+                ? "Aguardando autenticacao..."
+                : error
+                  ? error
+                  : roleLabel(user?.role)}
             </div>
           </div>
         </section>

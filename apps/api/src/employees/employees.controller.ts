@@ -47,8 +47,12 @@ export class EmployeesController {
 
   @Patch(':id')
   @Roles(Role.ADMIN, Role.TI)
-  update(@Param('id') id: string, @Body() dto: UpdateEmployeeDto) {
-    return this.employeesService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateEmployeeDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.employeesService.update(id, dto, req.user?.id);
   }
 
   @Patch(':id/inactivate')

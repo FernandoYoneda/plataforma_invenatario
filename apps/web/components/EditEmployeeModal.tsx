@@ -3,16 +3,18 @@
 import { FormEvent, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { createEmployee, getLocations } from "@/lib/api";
+import { getLocations, updateEmployee } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { canManageEmployees } from "@/lib/permissions";
 import type { Employee, Location } from "@/lib/types";
 import { useAuth } from "./AuthProvider";
 
-export default function NewEmployeeModal({
-  onCreated,
+export default function EditEmployeeModal({
+  employee,
+  onUpdated,
 }: {
-  onCreated: (employee: Employee) => void;
+  employee: Employee;
+  onUpdated: (employee: Employee) => void;
 }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -23,11 +25,11 @@ export default function NewEmployeeModal({
   const [referencesError, setReferencesError] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [department, setDepartment] = useState("");
-  const [position, setPosition] = useState("");
-  const [locationId, setLocationId] = useState("");
+  const [name, setName] = useState(employee.name);
+  const [email, setEmail] = useState(employee.email);
+  const [department, setDepartment] = useState(employee.department ?? "");
+  const [position, setPosition] = useState(employee.position ?? "");
+  const [locationId, setLocationId] = useState(employee.locationId ?? employee.location?.id ?? "");
 
   useEffect(() => setMounted(true), []);
 
@@ -41,6 +43,18 @@ export default function NewEmployeeModal({
       document.body.style.overflow = previousOverflow || "";
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    setName(employee.name);
+    setEmail(employee.email);
+    setDepartment(employee.department ?? "");
+    setPosition(employee.position ?? "");
+    setLocationId(employee.locationId ?? employee.location?.id ?? "");
+    setError(null);
+    setReferencesError(null);
+  }, [employee, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -92,16 +106,6 @@ export default function NewEmployeeModal({
     }
   }
 
-  function resetForm() {
-    setName("");
-    setEmail("");
-    setDepartment("");
-    setPosition("");
-    setLocationId("");
-    setError(null);
-    setReferencesError(null);
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -139,7 +143,8 @@ export default function NewEmployeeModal({
     setLoading(true);
 
     try {
-      const employee = await createEmployee(
+      const updated = await updateEmployee(
+        employee.id,
         {
           name: name.trim(),
           email: email.trim(),
@@ -150,14 +155,12 @@ export default function NewEmployeeModal({
         token,
       );
 
-      toast.success("Funcionario criado com sucesso.");
-      resetForm();
+      toast.success("Funcionario atualizado com sucesso.");
       setOpen(false);
-      onCreated(employee);
+      onUpdated(updated);
     } catch (err: unknown) {
       const rawMessage =
-        err instanceof Error ? err.message : "Nao foi possivel criar o funcionario.";
-
+        err instanceof Error ? err.message : "Nao foi possivel atualizar o funcionario.";
       const message =
         rawMessage.toLowerCase().includes("email") ||
         rawMessage.toLowerCase().includes("ja existe")
@@ -186,10 +189,13 @@ export default function NewEmployeeModal({
         >
           <div className="flex items-center justify-between border-b px-6 py-5 [border-color:var(--border-soft)]">
             <div>
-              <p className="eyebrow">Cadastro</p>
+              <p className="eyebrow">Edicao</p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
-                Novo Funcionário
+                Editar Funcionário
               </h2>
+              <p className="mt-1 text-sm [color:var(--text-secondary)]">
+                {employee.email}
+              </p>
             </div>
 
             <button
@@ -203,7 +209,7 @@ export default function NewEmployeeModal({
           </div>
 
           <form onSubmit={handleSubmit}>
-            <div className="space-y-4 px-6 py-5">
+            <div className="max-h-[75vh] space-y-4 overflow-auto px-6 py-5">
               <label className="block text-sm">
                 <span className="font-medium [color:var(--text-primary)]">
                   Nome *
@@ -308,7 +314,7 @@ export default function NewEmployeeModal({
                 disabled={loading}
                 className="btn-primary px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {loading ? "Criando..." : "Criar funcionario"}
+                {loading ? "Salvando..." : "Salvar alterações"}
               </button>
             </div>
           </form>
@@ -321,13 +327,10 @@ export default function NewEmployeeModal({
     <>
       <button
         type="button"
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-        className="btn-primary px-4 py-2.5 text-sm"
+        onClick={() => setOpen(true)}
+        className="action-button"
       >
-        Novo Funcionário
+        Editar funcionário
       </button>
 
       {open && mounted ? createPortal(modal, document.body) : null}

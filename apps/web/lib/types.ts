@@ -34,6 +34,8 @@ export type Employee = {
   email: string;
   department?: string | null;
   position?: string | null;
+  locationId?: string | null;
+  location?: Location | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -109,6 +111,15 @@ export type CreateEmployeeInput = {
   email: string;
   department?: string | null;
   position?: string | null;
+  locationId: string;
+};
+
+export type UpdateEmployeeInput = {
+  name?: string;
+  email?: string;
+  department?: string | null;
+  position?: string | null;
+  locationId: string;
 };
 
 export type CreateCategoryInput = {

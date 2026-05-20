@@ -9,13 +9,22 @@ import {
   type ReactNode,
 } from "react";
 import { getCurrentUser } from "@/lib/api";
-import { clearAuthToken, getAuthToken } from "@/lib/auth";
+import {
+  clearAuthToken,
+  clearAuthUser,
+  decodeAuthToken,
+  getAuthToken,
+  getAuthUser,
+  setAuthUser,
+} from "@/lib/auth";
 import type { AuthUser } from "@/lib/types";
 import { normalizeRole, type AppRole } from "@/lib/permissions";
 
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
+  loadingAuth: boolean;
+  error: string | null;
   refreshUser: () => void;
 };
 
@@ -23,7 +32,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -35,21 +45,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!token) {
         if (active) {
           setUser(null);
-          setLoading(false);
+          clearAuthUser();
+          setError(null);
+          setLoadingAuth(false);
         }
         return;
       }
 
-      setLoading(true);
+      setLoadingAuth(true);
+      setError(null);
 
       try {
         const current = await getCurrentUser(token);
         if (!active) return;
 
-        setUser({
+        const nextUser = {
           ...current,
           role: normalizeRole(current.role) ?? "LEITURA",
-        });
+        } satisfies AuthUser;
+
+        setUser(nextUser);
+        setAuthUser(nextUser);
       } catch (err: unknown) {
         if (!active) return;
 
@@ -60,12 +76,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           err.status === 401
         ) {
           clearAuthToken();
+          clearAuthUser();
+          setError(null);
+          setUser(null);
+          setLoadingAuth(false);
+          return;
         }
 
-        setUser(null);
+        const tokenPayload = decodeAuthToken(token);
+        const cached = getAuthUser<AuthUser>();
+        const fallbackUser = tokenPayload
+          ? {
+              id: tokenPayload.sub ?? "",
+              name: tokenPayload.name ?? tokenPayload.email ?? "Usuario",
+              email: tokenPayload.email ?? "",
+              role: normalizeRole(tokenPayload.role) ?? "LEITURA",
+              isActive: tokenPayload.isActive ?? true,
+              createdAt: tokenPayload.createdAt,
+              updatedAt: tokenPayload.updatedAt,
+            }
+            : cached
+              ? {
+                  ...cached,
+                  role: normalizeRole(cached.role) ?? "LEITURA",
+                }
+              : null;
+
+        if (fallbackUser) {
+          setUser(fallbackUser);
+          setError("Nao foi possivel atualizar o perfil no momento.");
+        } else {
+          setUser(null);
+          setError("Nao foi possivel carregar o perfil no momento.");
+        }
       } finally {
         if (active) {
-          setLoading(false);
+          setLoadingAuth(false);
         }
       }
     }
@@ -80,10 +126,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      loading,
+      loading: loadingAuth,
+      loadingAuth,
+      error,
       refreshUser: () => setRefreshKey((current) => current + 1),
     }),
-    [loading, user],
+    [error, loadingAuth, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

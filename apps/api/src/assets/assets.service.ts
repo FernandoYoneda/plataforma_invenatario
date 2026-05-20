@@ -530,7 +530,7 @@ export class AssetsService {
         model: this.trimToNull(dto.model),
         serialNumber: this.trimToNull(dto.serialNumber),
         valueCents: dto.valueCents,
-        status: dto.status,
+        status: dto.status ?? AssetStatus.ESTOQUE,
         notes: this.trimToNull(dto.notes),
         categoryId: this.trimToNullishId(dto.categoryId),
         locationId: this.trimToNullishId(dto.locationId),

@@ -54,6 +54,11 @@ export class UsersController {
     return this.usersService.inactivate(id, req.user?.id);
   }
 
+  @Patch(':id/activate')
+  activate(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.usersService.activate(id, req.user?.id);
+  }
+
   @Patch(':id/reset-password')
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   resetPassword(

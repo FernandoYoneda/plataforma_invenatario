@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import AppShell from "./AppShell";
@@ -171,6 +172,7 @@ export default function ReferenceDataView<TItem extends ReferenceItem>({
                   <th>Nome</th>
                   <th>Descricao</th>
                   <th>Criado em</th>
+                  {current === "locations" ? <th className="text-right">Acoes</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -179,6 +181,19 @@ export default function ReferenceDataView<TItem extends ReferenceItem>({
                     <td className="cell-strong">{item.name}</td>
                     <td>{item.description ?? "-"}</td>
                     <td>{formatDate(item.createdAt)}</td>
+                    {current === "locations" ? (
+                      <td className="text-right">
+                        <div className="asset-actions-row justify-end">
+                          <Link
+                            href={`/assets?locationId=${encodeURIComponent(item.id)}`}
+                            className="action-button action-button-compact"
+                            title="Ver ativos desta localizacao"
+                          >
+                            Ver ativos
+                          </Link>
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

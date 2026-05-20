@@ -56,8 +56,10 @@ function EmployeeIcon() {
 
 export default function EmployeeAssignmentsModal({
   employee,
+  onChanged,
 }: {
   employee: Employee;
+  onChanged?: () => void;
 }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -172,6 +174,7 @@ export default function EmployeeAssignmentsModal({
     () => assignments.filter((assignment) => Boolean(assignment.returnedAt)),
     [assignments],
   );
+  const employeeLocationName = employee.location?.name ?? null;
 
   const activeAssetIds = useMemo(
     () => new Set(activeAssignments.map((assignment) => assignment.assetId)),
@@ -309,6 +312,7 @@ export default function EmployeeAssignmentsModal({
       toast.success("Ativo atribuido com sucesso.");
       resetAssignForm();
       await reloadData();
+      onChanged?.();
     } catch (err: unknown) {
       if (handleAuthError(err)) {
         return;
@@ -343,6 +347,7 @@ export default function EmployeeAssignmentsModal({
       await returnAssignment(assignmentId, {}, token);
       toast.success("Ativo devolvido com sucesso.");
       await reloadData();
+      onChanged?.();
     } catch (err: unknown) {
       if (handleAuthError(err)) {
         return;
@@ -378,6 +383,9 @@ export default function EmployeeAssignmentsModal({
               </h2>
               <p className="mt-1 text-sm [color:var(--text-secondary)]">
                 {employee.email}
+              </p>
+              <p className="mt-1 text-xs [color:var(--text-secondary)]">
+                Localização padrão: {employeeLocationName ?? "Sem localização padrão"}
               </p>
             </div>
 
@@ -421,6 +429,15 @@ export default function EmployeeAssignmentsModal({
                   <div className="status-pill">
                     {availableAssets.length} disponivel(is)
                   </div>
+                  <div className="status-pill">
+                    {employeeLocationName ?? "Sem localização"}
+                  </div>
+                </div>
+
+                <div className="status-banner-warning rounded-[22px] px-4 py-3 text-sm">
+                  {employeeLocationName
+                    ? `Ao confirmar a atribuição, o ativo receberá a localização "${employeeLocationName}".`
+                    : "Este funcionário não possui localização padrão. Se a atribuição for confirmada, o ativo ficará sem localização vinculada."}
                 </div>
 
                 {assignPanelOpen ? (
@@ -567,12 +584,12 @@ export default function EmployeeAssignmentsModal({
                             />
                           </label>
 
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <button
-                              type="submit"
-                              disabled={Boolean(actionLoadingId)}
-                              className="btn-primary px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
-                            >
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="submit"
+                          disabled={Boolean(actionLoadingId)}
+                          className="btn-primary px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+                        >
                               {actionLoadingId === selectedAsset.id
                                 ? "Atribuindo..."
                                 : "Confirmar atribuicao"}
@@ -581,11 +598,11 @@ export default function EmployeeAssignmentsModal({
                             <button
                               type="button"
                               onClick={resetAssignForm}
-                              className="btn-secondary px-4 py-3 text-sm"
-                            >
-                              Limpar selecao
-                            </button>
-                          </div>
+                            className="btn-secondary px-4 py-3 text-sm"
+                          >
+                            Limpar selecao
+                          </button>
+                        </div>
                         </div>
                       ) : null}
                     </form>

@@ -51,11 +51,15 @@ model Employee {
   email      String   @unique
   department String?
   position   String?
+  locationId String?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  location    Location?  @relation(fields: [locationId], references: [id], onDelete: SetNull)
   assignments Assignment[]
+
+  @@index([locationId])
 }
 
 model Category {
@@ -75,7 +79,8 @@ model Location {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  assets Asset[]
+  assets    Asset[]
+  employees Employee[]
 }
 
 model Counter {

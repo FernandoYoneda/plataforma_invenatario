@@ -56,18 +56,30 @@ export default function EditAssetModal({
   categories: providedCategories,
   locations: providedLocations,
   onUpdated,
+  open: openProp,
+  onOpenChange,
+  triggerClassName,
+  hideTrigger,
+  onTrigger,
 }: {
   asset: Asset;
   categories?: Category[];
   locations?: Location[];
   onUpdated?: (asset: Asset) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  triggerClassName?: string;
+  hideTrigger?: boolean;
+  onTrigger?: () => void;
 }) {
   const router = useRouter();
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
 
   const [type, setType] = useState<AssetType>(asset.type);
   const [brand, setBrand] = useState(asset.brand);
@@ -481,16 +493,19 @@ export default function EditAssetModal({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-        className="action-button"
-      >
-        Editar
-      </button>
+      {hideTrigger ? null : (
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            onTrigger?.();
+            setOpen(true);
+          }}
+          className={`action-button ${triggerClassName ?? ""}`.trim()}
+        >
+          Editar
+        </button>
+      )}
 
       {open && mounted ? createPortal(modal, document.body) : null}
     </>

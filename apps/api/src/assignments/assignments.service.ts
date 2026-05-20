@@ -35,16 +35,34 @@ export class AssignmentsService {
       : `Ativo ${asset.internalCode}`;
   }
 
+  private describeLocation(location?: { name: string } | null) {
+    return location?.name
+      ? `na localizacao ${location.name}`
+      : 'sem localizacao vinculada';
+  }
+
   async create(dto: CreateAssignmentDto, userId?: string | null) {
     const asset = await this.prisma.asset.findUnique({
       where: { id: dto.assetId },
+      include: {
+        location: true,
+      },
     });
     if (!asset) throw new NotFoundException('Ativo nao encontrado');
 
     const employee = await this.prisma.employee.findUnique({
       where: { id: dto.employeeId },
+      include: {
+        location: true,
+      },
     });
     if (!employee) throw new NotFoundException('Funcionario nao encontrado');
+
+    if (!employee.locationId) {
+      throw new BadRequestException(
+        'Funcionario precisa de localizacao para receber ativos.',
+      );
+    }
 
     const activeAssignment = await this.prisma.assignment.findFirst({
       where: {
@@ -61,16 +79,12 @@ export class AssignmentsService {
       throw new BadRequestException('Ativo ja possui atribuicao ativa');
     }
 
-    const assignment = await this.prisma.$transaction(async (tx) => {
+    const assignmentId = await this.prisma.$transaction(async (tx) => {
       const createdAssignment = await tx.assignment.create({
         data: {
           assetId: dto.assetId,
           employeeId: dto.employeeId,
           notes: this.trimToNull(dto.notes),
-        },
-        include: {
-          asset: true,
-          employee: true,
         },
       });
 
@@ -78,17 +92,39 @@ export class AssignmentsService {
         where: { id: dto.assetId },
         data: {
           status: AssetStatus.EM_USO,
+          locationId: employee.locationId ?? null,
         },
       });
 
-      return createdAssignment;
+      return createdAssignment.id;
     });
+
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        asset: {
+          include: {
+            location: true,
+            category: true,
+          },
+        },
+        employee: {
+          include: {
+            location: true,
+          },
+        },
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Atribuicao nao encontrada');
+    }
 
     await this.auditLogs?.create({
       action: 'ASSIGNMENT_CREATED',
       entityType: 'Assignment',
       entityId: assignment.id,
-      description: `${this.describeAsset(assignment.asset)} atribuído para ${assignment.employee?.name ?? assignment.employeeId ?? 'funcionário removido'}`,
+      description: `${this.describeAsset(assignment.asset)} atribuÃ­do para ${assignment.employee?.name ?? assignment.employeeId ?? 'funcionÃ¡rio removido'} ${this.describeLocation(assignment.employee?.location)}`,
       userId,
     });
 
@@ -102,6 +138,19 @@ export class AssignmentsService {
   ) {
     const assignment = await this.prisma.assignment.findUnique({
       where: { id },
+      include: {
+        asset: {
+          include: {
+            location: true,
+            category: true,
+          },
+        },
+        employee: {
+          include: {
+            location: true,
+          },
+        },
+      },
     });
 
     if (!assignment) {
@@ -112,16 +161,12 @@ export class AssignmentsService {
       throw new BadRequestException('Atribuicao ja foi encerrada');
     }
 
-    const returnedAssignment = await this.prisma.$transaction(async (tx) => {
+    const returnedAssignmentId = await this.prisma.$transaction(async (tx) => {
       const updatedAssignment = await tx.assignment.update({
         where: { id },
         data: {
           returnedAt: new Date(),
           ...(dto.notes !== undefined && { notes: this.trimToNull(dto.notes) }),
-        },
-        include: {
-          asset: true,
-          employee: true,
         },
       });
 
@@ -129,17 +174,39 @@ export class AssignmentsService {
         where: { id: updatedAssignment.assetId },
         data: {
           status: AssetStatus.ESTOQUE,
+          locationId: null,
         },
       });
 
-      return updatedAssignment;
+      return updatedAssignment.id;
     });
+
+    const returnedAssignment = await this.prisma.assignment.findUnique({
+      where: { id: returnedAssignmentId },
+      include: {
+        asset: {
+          include: {
+            location: true,
+            category: true,
+          },
+        },
+        employee: {
+          include: {
+            location: true,
+          },
+        },
+      },
+    });
+
+    if (!returnedAssignment) {
+      throw new NotFoundException('Atribuicao nao encontrada');
+    }
 
     await this.auditLogs?.create({
       action: 'ASSIGNMENT_RETURNED',
       entityType: 'Assignment',
       entityId: returnedAssignment.id,
-      description: `${this.describeAsset(returnedAssignment.asset)} devolvido por ${returnedAssignment.employee?.name ?? returnedAssignment.employeeId ?? 'funcionário removido'}`,
+      description: `${this.describeAsset(returnedAssignment.asset)} devolvido por ${returnedAssignment.employee?.name ?? returnedAssignment.employeeId ?? 'funcionÃ¡rio removido'} ${this.describeLocation(returnedAssignment.asset?.location)}`,
       userId,
     });
 
@@ -152,8 +219,17 @@ export class AssignmentsService {
         returnedAt: null,
       },
       include: {
-        asset: true,
-        employee: true,
+        asset: {
+          include: {
+            location: true,
+            category: true,
+          },
+        },
+        employee: {
+          include: {
+            location: true,
+          },
+        },
       },
       orderBy: {
         assignedAt: 'desc',
@@ -173,7 +249,11 @@ export class AssignmentsService {
     return this.prisma.assignment.findMany({
       where: { assetId },
       include: {
-        employee: true,
+        employee: {
+          include: {
+            location: true,
+          },
+        },
       },
       orderBy: {
         assignedAt: 'desc',

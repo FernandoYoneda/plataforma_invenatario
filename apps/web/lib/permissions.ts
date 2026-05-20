@@ -33,7 +33,7 @@ export function roleLabel(role?: string | null) {
     case "LEITURA":
       return "Leitura";
     default:
-      return "Sem perfil";
+      return "Perfil indisponível";
   }
 }
 

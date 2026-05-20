@@ -24,15 +24,27 @@ function HistoryIcon() {
 export default function AssetHistoryModal({
   asset,
   refreshKey,
+  open: openProp,
+  onOpenChange,
+  triggerClassName,
+  hideTrigger,
+  onTrigger,
 }: {
   asset: Asset;
   refreshKey: number;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  triggerClassName?: string;
+  hideTrigger?: boolean;
+  onTrigger?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [history, setHistory] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
 
   useEffect(() => setMounted(true), []);
 
@@ -173,14 +185,19 @@ export default function AssetHistoryModal({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="action-button"
-      >
-        <HistoryIcon />
-        Historico
-      </button>
+      {hideTrigger ? null : (
+        <button
+          type="button"
+          onClick={() => {
+            onTrigger?.();
+            setOpen(true);
+          }}
+          className={`action-button ${triggerClassName ?? ""}`.trim()}
+        >
+          <HistoryIcon />
+          Historico
+        </button>
+      )}
 
       {open && mounted ? createPortal(modal, document.body) : null}
     </>

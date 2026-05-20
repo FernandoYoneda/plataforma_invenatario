@@ -22,12 +22,22 @@ function AssignIcon() {
 export default function AssignAssetModal({
   asset,
   onAssigned,
+  open: openProp,
+  onOpenChange,
+  triggerClassName,
+  hideTrigger,
+  onTrigger,
 }: {
   asset: Asset;
   onAssigned: (assignment: Assignment) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  triggerClassName?: string;
+  hideTrigger?: boolean;
+  onTrigger?: () => void;
 }) {
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
@@ -36,6 +46,8 @@ export default function AssignAssetModal({
   const [employeesError, setEmployeesError] = useState<string | null>(null);
   const [employeeId, setEmployeeId] = useState("");
   const [notes, setNotes] = useState("");
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
 
   useEffect(() => setMounted(true), []);
 
@@ -71,7 +83,15 @@ export default function AssignAssetModal({
       try {
         const data = await getActiveEmployees(token);
         if (!active) return;
-        setEmployees(data);
+        const withLocation = data.filter(
+          (item) => Boolean(item.locationId ?? item.location?.id),
+        );
+        setEmployees(withLocation);
+        if (withLocation.length !== data.length) {
+          setEmployeesError(
+            "Alguns funcionarios ativos foram ocultados por nao terem localizacao cadastrada.",
+          );
+        }
       } catch (err: unknown) {
         if (!active) return;
 
@@ -119,6 +139,14 @@ export default function AssignAssetModal({
 
     if (!employeeId) {
       const message = "Selecione um funcionário.";
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
+    if (!selectedEmployee?.locationId && !selectedEmployee?.location?.id) {
+      const message =
+        "Funcionario precisa de localizacao para receber ativos.";
       setError(message);
       toast.error(message);
       return;
@@ -298,17 +326,20 @@ export default function AssignAssetModal({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-        className="action-button"
-      >
-        <AssignIcon />
-        Atribuir
-      </button>
+      {hideTrigger ? null : (
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            onTrigger?.();
+            setOpen(true);
+          }}
+          className={`action-button ${triggerClassName ?? ""}`.trim()}
+        >
+          <AssignIcon />
+          Atribuir
+        </button>
+      )}
 
       {open && mounted ? createPortal(modal, document.body) : null}
     </>

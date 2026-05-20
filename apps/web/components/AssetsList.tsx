@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -8,6 +8,7 @@ import {
   getAssets,
   getCategories,
   getLocations,
+  returnAssignment,
 } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import { useAuth } from "./AuthProvider";
@@ -88,6 +89,21 @@ function labelStatus(status: Asset["status"]) {
   return STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
 }
 
+function statusBadgeClass(status: Asset["status"]) {
+  switch (status) {
+    case "EM_USO":
+      return "asset-status-badge asset-status-badge-success";
+    case "ESTOQUE":
+      return "asset-status-badge asset-status-badge-info";
+    case "MANUTENCAO":
+      return "asset-status-badge asset-status-badge-warning";
+    case "BAIXADO":
+      return "asset-status-badge asset-status-badge-danger";
+    default:
+      return "asset-status-badge";
+  }
+}
+
 function assetCategoryId(asset: Asset) {
   return asset.categoryId ?? asset.category?.id ?? "";
 }
@@ -145,6 +161,16 @@ function downloadBlob(filename: string, blob: Blob) {
   URL.revokeObjectURL(url);
 }
 
+function ActionMenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 5.5v.1" />
+      <path d="M12 12v.1" />
+      <path d="M12 18.5v.1" />
+    </svg>
+  );
+}
+
 export default function AssetsList() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -168,12 +194,27 @@ export default function AssetsList() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
+  const [openActionsMenuAssetId, setOpenActionsMenuAssetId] = useState<
+    string | null
+  >(null);
+  const [selectedAssetForAssign, setSelectedAssetForAssign] =
+    useState<Asset | null>(null);
+  const [selectedAssetForEdit, setSelectedAssetForEdit] = useState<
+    Asset | null
+  >(null);
+  const [selectedAssetForHistory, setSelectedAssetForHistory] =
+    useState<Asset | null>(null);
+  const [selectedAssetForQr, setSelectedAssetForQr] = useState<Asset | null>(
+    null,
+  );
+  const [returningAssetId, setReturningAssetId] = useState<string | null>(null);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
   const locationIdFromQuery = searchParams.get("locationId") ?? "";
   const queryLocationName =
     locations.find((item) => item.id === locationIdFromQuery)?.name ?? "";
-  const canBulkManageAssets = canManageAssets(user?.role);
+  const showBackToLocations = Boolean(locationIdFromQuery);
+  const canManageAssetActions = canManageAssets(user?.role);
   const canExportAssets = canExportReports(user?.role);
 
   function handleAuthError(err: unknown) {
@@ -192,7 +233,7 @@ export default function AssetsList() {
     return false;
   }
 
-  async function loadAssets() {
+  const loadAssets = useCallback(async () => {
     const token = getAuthToken();
 
     if (!token) {
@@ -215,9 +256,9 @@ export default function AssetsList() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [router]);
 
-  async function loadActiveAssignments() {
+  const loadActiveAssignments = useCallback(async () => {
     const token = getAuthToken();
 
     if (!token) {
@@ -230,9 +271,9 @@ export default function AssetsList() {
     } catch (err: unknown) {
       handleAuthError(err);
     }
-  }
+  }, [router]);
 
-  async function loadReferences() {
+  const loadReferences = useCallback(async () => {
     const token = getAuthToken();
 
     if (!token) {
@@ -259,7 +300,11 @@ export default function AssetsList() {
       handleAuthError(err);
       setReferencesError(message);
     }
-  }
+  }, [router]);
+
+  const reloadAssetData = useCallback(async () => {
+    await Promise.all([loadAssets(), loadActiveAssignments()]);
+  }, [loadActiveAssignments, loadAssets]);
 
   useEffect(() => {
     async function load() {
@@ -339,28 +384,6 @@ export default function AssetsList() {
   const pageStartIndex = (currentPage - 1) * pageSize;
   const pageEndIndex = Math.min(pageStartIndex + pageSize, sortedAssets.length);
   const paginatedAssets = sortedAssets.slice(pageStartIndex, pageEndIndex);
-  const selectedAssetSet = useMemo(
-    () => new Set(selectedAssetIds),
-    [selectedAssetIds],
-  );
-  const selectedCount = selectedAssetIds.length;
-  const visibleSelectedCount = paginatedAssets.filter((asset) =>
-    selectedAssetSet.has(asset.id),
-  ).length;
-  const allVisibleSelected =
-    paginatedAssets.length > 0 && visibleSelectedCount === paginatedAssets.length;
-  const someVisibleSelected =
-    visibleSelectedCount > 0 && visibleSelectedCount < paginatedAssets.length;
-  const printLabelsHref = useMemo(() => {
-    if (selectedAssetIds.length === 0) {
-      return "/assets/print-labels";
-    }
-
-    const params = new URLSearchParams();
-    params.set("ids", selectedAssetIds.join(","));
-    return `/assets/print-labels?${params.toString()}`;
-  }, [selectedAssetIds]);
-
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
@@ -368,25 +391,22 @@ export default function AssetsList() {
   }, [currentPage, totalPages]);
 
   useEffect(() => {
-    setSelectedAssetIds((current) => {
-      if (current.length === 0) {
-        return current;
-      }
+    if (!openActionsMenuAssetId) {
+      return;
+    }
 
-      const next = current.filter((assetId) =>
-        filteredAssets.some((asset) => asset.id === assetId),
-      );
-
+    function handlePointerDown(event: PointerEvent) {
       if (
-        next.length === current.length &&
-        next.every((assetId, index) => assetId === current[index])
+        actionsMenuRef.current &&
+        !actionsMenuRef.current.contains(event.target as Node)
       ) {
-        return current;
+        setOpenActionsMenuAssetId(null);
       }
+    }
 
-      return next;
-    });
-  }, [filteredAssets]);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [openActionsMenuAssetId]);
 
   const hasFilters = Boolean(
     search.trim() ||
@@ -410,38 +430,6 @@ export default function AssetsList() {
     router.replace(params.toString() ? `/assets?${params.toString()}` : "/assets");
   }
 
-  function toggleAssetSelection(assetId: string) {
-    setSelectedAssetIds((current) =>
-      current.includes(assetId)
-        ? current.filter((item) => item !== assetId)
-        : [...current, assetId],
-    );
-  }
-
-  function toggleCurrentPageSelection() {
-    setSelectedAssetIds((current) => {
-      const currentSet = new Set(current);
-
-      if (allVisibleSelected) {
-        return current.filter((assetId) => !paginatedAssets.some((asset) => asset.id === assetId));
-      }
-
-      const next = [...current];
-
-      for (const asset of paginatedAssets) {
-        if (!currentSet.has(asset.id)) {
-          next.push(asset.id);
-        }
-      }
-
-      return next;
-    });
-  }
-
-  function clearSelection() {
-    setSelectedAssetIds([]);
-  }
-
   function currentEmployeeName(asset: Asset) {
     const assignment = activeAssignmentByAssetId.get(asset.id);
 
@@ -450,6 +438,58 @@ export default function AssetsList() {
     }
 
     return assignment.employee?.name ?? "Funcionário removido";
+  }
+
+  async function handleReturnAsset(asset: Asset) {
+    const assignment = activeAssignmentByAssetId.get(asset.id);
+
+    if (!assignment) {
+      setError("Nao existe atribuicao ativa para este ativo.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Deseja devolver este ativo? O vínculo atual será encerrado.",
+    );
+
+    if (!confirmed) return;
+
+    const token = getAuthToken();
+
+    if (!token) {
+      setRedirecting(true);
+      router.replace("/login");
+      return;
+    }
+
+    setReturningAssetId(asset.id);
+    setError(null);
+
+    try {
+      await returnAssignment(assignment.id, {}, token);
+
+      setAssets((current) =>
+        current.map((item) =>
+          item.id === asset.id
+            ? { ...item, status: "ESTOQUE", locationId: null, location: null }
+            : item,
+        ),
+      );
+
+      setActiveAssignments((current) =>
+        current.filter((item) => item.id !== assignment.id),
+      );
+
+      setAssignmentRefreshKey((current) => current + 1);
+      setHistoryRefreshKey((current) => current + 1);
+      void reloadAssetData();
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Nao foi possivel devolver o ativo.";
+      setError(message);
+    } finally {
+      setReturningAssetId(null);
+    }
   }
 
   function exportRows() {
@@ -575,6 +615,11 @@ export default function AssetsList() {
       contentSize="wide"
       actions={
         <div className="flex flex-wrap items-center gap-2">
+          {showBackToLocations ? (
+            <Link href="/locations" className="btn-secondary px-4 py-2.5 text-sm">
+              ← Voltar para Localizações
+            </Link>
+          ) : null}
           {canExportAssets ? (
             <div className="relative">
               <button
@@ -614,11 +659,11 @@ export default function AssetsList() {
               setError(null);
             }}
           />
-          <ImportAssetsModal
-            assets={assets}
-            categories={categories}
-            locations={locations}
-            onImported={(imported) => {
+            <ImportAssetsModal
+              assets={assets}
+              categories={categories}
+              locations={locations}
+              onImported={(imported) => {
               setAssets((current) => {
                 const importedIds = new Set(imported.map((asset) => asset.id));
                 return [
@@ -626,12 +671,13 @@ export default function AssetsList() {
                   ...current.filter((asset) => !importedIds.has(asset.id)),
                 ];
               });
-              setError(null);
-              setCurrentPage(1);
-              setHistoryRefreshKey((current) => current + imported.length);
-              setAssignmentRefreshKey((current) => current + imported.length);
-            }}
-          />
+                setError(null);
+                setCurrentPage(1);
+                setHistoryRefreshKey((current) => current + imported.length);
+                setAssignmentRefreshKey((current) => current + imported.length);
+                void reloadAssetData();
+              }}
+            />
           </div>
         </div>
       }
@@ -663,7 +709,7 @@ export default function AssetsList() {
             </section>
             ) : null}
 
-          <section className="overflow-hidden rounded-[30px] border [border-color:var(--border-soft)] bg-[rgba(255,255,255,0.72)] shadow-[0_18px_50px_rgba(23,58,67,0.08)] backdrop-blur">
+          <section className="overflow-visible rounded-[30px] border [border-color:var(--border-soft)] bg-[rgba(255,255,255,0.72)] shadow-[0_18px_50px_rgba(23,58,67,0.08)] backdrop-blur">
             <div className="flex flex-col gap-3 border-b px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-center sm:justify-between">
               <div className="status-pill">
                 {redirecting
@@ -675,26 +721,6 @@ export default function AssetsList() {
                       : `${assets.length} ativo(s)`}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {canBulkManageAssets && selectedCount > 0 ? (
-                  <>
-                    <span className="status-pill">
-                      {selectedCount} selecionado(s)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={clearSelection}
-                      className="btn-secondary px-4 py-2.5 text-sm"
-                    >
-                      Limpar selecao
-                    </button>
-                    <Link
-                      href={printLabelsHref}
-                      className="btn-primary px-4 py-2.5 text-sm"
-                    >
-                      Imprimir etiquetas
-                    </Link>
-                  </>
-                ) : null}
                 <Link
                   href="/login"
                   className="text-sm font-medium [color:var(--brand-teal-700)] underline-offset-4 hover:underline"
@@ -835,24 +861,7 @@ export default function AssetsList() {
                   <table className="data-table data-table-compact">
                     <thead>
                       <tr>
-                        <th className="w-14">
-                          <label className="inline-flex items-center gap-2 whitespace-nowrap text-[0.72rem] font-semibold uppercase tracking-[0.08em] [color:var(--text-muted)]">
-                            <input
-                              ref={(input) => {
-                                if (input) {
-                                  input.indeterminate = someVisibleSelected;
-                                }
-                              }}
-                              type="checkbox"
-                              checked={allVisibleSelected}
-                              onChange={toggleCurrentPageSelection}
-                              aria-label="Selecionar todos os ativos da pagina atual"
-                              className="h-4 w-4 rounded border-[color:var(--border-strong)] accent-[color:var(--brand-teal-700)]"
-                            />
-                            <span>Selecionar todos</span>
-                          </label>
-                        </th>
-                    <th>{sortableHeader("internalCode", "Código")}</th>
+                        <th>{sortableHeader("internalCode", "Código")}</th>
                         <th>{sortableHeader("type", "Tipo")}</th>
                         <th>{sortableHeader("brand", "Marca")}</th>
                         <th>{sortableHeader("model", "Modelo")}</th>
@@ -867,60 +876,113 @@ export default function AssetsList() {
                     <tbody>
                       {paginatedAssets.map((asset) => (
                         <tr key={asset.id}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={selectedAssetSet.has(asset.id)}
-                              onChange={() => toggleAssetSelection(asset.id)}
-                              aria-label={`Selecionar ativo ${asset.internalCode}`}
-                              className="h-4 w-4 rounded border-[color:var(--border-strong)] accent-[color:var(--brand-teal-700)]"
-                            />
-                          </td>
                           <td className="cell-strong">{asset.internalCode}</td>
                           <td>{labelType(asset.type)}</td>
                           <td>{asset.brand}</td>
                           <td>{asset.model ?? "-"}</td>
                           <td>{asset.serialNumber ?? "-"}</td>
-                          <td>{labelStatus(asset.status)}</td>
+                          <td>
+                            <span className={statusBadgeClass(asset.status)}>
+                              {labelStatus(asset.status)}
+                            </span>
+                          </td>
                           <td>{assetCategoryName(asset, categories)}</td>
                           <td>{assetLocationName(asset, locations)}</td>
                           <td className="text-right">{moneyBRL(asset.valueCents)}</td>
                           <td className="asset-actions-column">
-                            <div className="asset-actions-row">
-                          <AssignAssetModal
-                            asset={asset}
-                            onAssigned={() => {
-                              setAssignmentRefreshKey((current) => current + 1);
-                              setHistoryRefreshKey((current) => current + 1);
-                            }}
-                          />
-                              <EditAssetModal
-                                asset={asset}
-                                categories={categories}
-                                locations={locations}
-                                onUpdated={(updatedAsset) => {
-                                  setAssets((current) =>
-                                    current.map((item) =>
-                                      item.id === updatedAsset.id
-                                        ? updatedAsset
-                                        : item,
-                                    ),
-                                  );
-                                  setError(null);
-                                  setHistoryRefreshKey((current) => current + 1);
-                                }}
-                              />
-                              <AssetHistoryModal
-                                asset={asset}
-                                refreshKey={historyRefreshKey}
-                              />
-                              <AssetQrCodeModal asset={asset} />
-                              <Link
-                                href={`/assets/${asset.id}`}
-                                className="action-button"
+                            <div className="asset-actions-menu">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setOpenActionsMenuAssetId((current) =>
+                                    current === asset.id ? null : asset.id,
+                                  )
+                                }
+                                className="action-button asset-actions-menu-trigger"
+                                aria-expanded={openActionsMenuAssetId === asset.id}
+                                aria-haspopup="menu"
+                                aria-label={`Abrir ações do ativo ${asset.internalCode}`}
                               >
-                                Ver detalhes
-                              </Link>
+                                <ActionMenuIcon />
+                                Ações
+                              </button>
+
+                              {openActionsMenuAssetId === asset.id ? (
+                                <div
+                                  ref={actionsMenuRef}
+                                  className="asset-actions-menu-panel"
+                                  role="menu"
+                                  aria-label={`Ações do ativo ${asset.internalCode}`}
+                                >
+                                  {canManageAssetActions ? (
+                                    <>
+                                      {activeAssignmentByAssetId.has(asset.id) ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setOpenActionsMenuAssetId(null);
+                                            void handleReturnAsset(asset);
+                                          }}
+                                          disabled={returningAssetId === asset.id}
+                                          className="action-button asset-actions-menu-item disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                          {returningAssetId === asset.id
+                                            ? "Devolvendo..."
+                                            : "Devolver"}
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedAssetForAssign(asset);
+                                            setOpenActionsMenuAssetId(null);
+                                          }}
+                                          className="action-button asset-actions-menu-item"
+                                        >
+                                          Atribuir
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedAssetForEdit(asset);
+                                          setOpenActionsMenuAssetId(null);
+                                        }}
+                                        className="action-button asset-actions-menu-item"
+                                      >
+                                        Editar
+                                      </button>
+                                    </>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedAssetForHistory(asset);
+                                      setOpenActionsMenuAssetId(null);
+                                    }}
+                                    className="action-button asset-actions-menu-item"
+                                  >
+                                    Historico
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedAssetForQr(asset);
+                                      setOpenActionsMenuAssetId(null);
+                                    }}
+                                    className="action-button asset-actions-menu-item"
+                                  >
+                                    QR Code
+                                  </button>
+                                  <Link
+                                    href={`/assets/${asset.id}`}
+                                    onClick={() => setOpenActionsMenuAssetId(null)}
+                                    className="action-button asset-actions-menu-item"
+                                  >
+                                    Ver detalhes
+                                  </Link>
+                                </div>
+                              ) : null}
                             </div>
                           </td>
                         </tr>
@@ -987,6 +1049,76 @@ export default function AssetsList() {
                 </div>
               </>
             )}
+
+            {selectedAssetForAssign ? (
+              <AssignAssetModal
+                asset={selectedAssetForAssign}
+                open={Boolean(selectedAssetForAssign)}
+                hideTrigger
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setSelectedAssetForAssign(null);
+                  }
+                }}
+                onAssigned={() => {
+                  setAssignmentRefreshKey((current) => current + 1);
+                  setHistoryRefreshKey((current) => current + 1);
+                  void reloadAssetData();
+                }}
+              />
+            ) : null}
+
+            {selectedAssetForEdit ? (
+              <EditAssetModal
+                asset={selectedAssetForEdit}
+                open={Boolean(selectedAssetForEdit)}
+                hideTrigger
+                categories={categories}
+                locations={locations}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setSelectedAssetForEdit(null);
+                  }
+                }}
+                onUpdated={(updatedAsset) => {
+                  setAssets((current) =>
+                    current.map((item) =>
+                      item.id === updatedAsset.id ? updatedAsset : item,
+                    ),
+                  );
+                  setError(null);
+                  setHistoryRefreshKey((current) => current + 1);
+                  void reloadAssetData();
+                }}
+              />
+            ) : null}
+
+            {selectedAssetForHistory ? (
+              <AssetHistoryModal
+                asset={selectedAssetForHistory}
+                refreshKey={historyRefreshKey}
+                open={Boolean(selectedAssetForHistory)}
+                hideTrigger
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setSelectedAssetForHistory(null);
+                  }
+                }}
+              />
+            ) : null}
+
+            {selectedAssetForQr ? (
+              <AssetQrCodeModal
+                asset={selectedAssetForQr}
+                open={Boolean(selectedAssetForQr)}
+                hideTrigger
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setSelectedAssetForQr(null);
+                  }
+                }}
+              />
+            ) : null}
           </section>
     </AppShell>
   );

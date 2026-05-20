@@ -9,6 +9,7 @@ import type { Employee } from "@/lib/types";
 import AppShell from "./AppShell";
 import ImportEmployeesModal from "./ImportEmployeesModal";
 import DeleteEmployeeButton from "./DeleteEmployeeButton";
+import EditEmployeeModal from "./EditEmployeeModal";
 import EmployeeAssignmentsModal from "./EmployeeAssignmentsModal";
 import NewEmployeeModal from "./NewEmployeeModal";
 
@@ -31,6 +32,15 @@ export default function EmployeesView() {
       [...current, ...importedEmployees].sort((a, b) =>
         a.name.localeCompare(b.name, "pt-BR"),
       ),
+    );
+    setError(null);
+  }
+
+  function handleEmployeeUpdated(updatedEmployee: Employee) {
+    setEmployees((current) =>
+      [...current]
+        .map((item) => (item.id === updatedEmployee.id ? updatedEmployee : item))
+        .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
     );
     setError(null);
   }
@@ -188,6 +198,10 @@ export default function EmployeesView() {
                           >
                             Ver perfil
                           </Link>
+                          <EditEmployeeModal
+                            employee={employee}
+                            onUpdated={handleEmployeeUpdated}
+                          />
                           <EmployeeAssignmentsModal employee={employee} />
                           <DeleteEmployeeButton
                             employee={employee}
@@ -206,12 +220,18 @@ export default function EmployeesView() {
                           />
                         </div>
                       ) : (
-                        <Link
-                          href={`/employees/${employee.id}`}
-                          className="action-button"
-                        >
-                          Ver perfil
-                        </Link>
+                        <div className="asset-actions-row justify-start">
+                          <Link
+                            href={`/employees/${employee.id}`}
+                            className="action-button"
+                          >
+                            Ver perfil
+                          </Link>
+                          <EditEmployeeModal
+                            employee={employee}
+                            onUpdated={handleEmployeeUpdated}
+                          />
+                        </div>
                       )}
                     </td>
                   </tr>

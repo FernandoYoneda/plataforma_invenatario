@@ -27,6 +27,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<HttpResponse>();
     const request = ctx.getRequest<HttpRequest>();
+    this.logException(exception, request.url);
     const { statusCode, message } = this.resolveException(exception);
 
     response.status(statusCode).json({
@@ -98,12 +99,30 @@ export class ApiExceptionFilter implements ExceptionFilter {
           statusCode: HttpStatus.CONFLICT,
           message: 'Operacao viola relacionamentos existentes',
         };
+      case 'P2021':
+      case 'P2022':
+        return {
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: 'Erro de compatibilidade do banco. Aplique as migrations.',
+        };
       default:
         return {
-          statusCode: HttpStatus.BAD_REQUEST,
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
           message: 'Erro ao processar dados no banco',
         };
     }
+  }
+
+  private logException(exception: unknown, path?: string) {
+    if (exception instanceof Error) {
+      console.error('[API ERROR]', path ?? '', exception.name, exception.message);
+      if (exception.stack) {
+        console.error(exception.stack);
+      }
+      return;
+    }
+
+    console.error('[API ERROR]', path ?? '', exception);
   }
 
   private isMulterError(

@@ -211,6 +211,43 @@ export class UsersService {
     return this.safeUser(updated);
   }
 
+  async activate(id: string, actorId?: string | null) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: userSelect,
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario nao encontrado.');
+    }
+
+    if (user.isActive) {
+      return this.safeUser(user);
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const nextUser = await tx.user.update({
+        where: { id },
+        data: { isActive: true },
+        select: userSelect,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          action: 'USER_ACTIVATED',
+          entityType: 'User',
+          entityId: nextUser.id,
+          description: `Usuario ${nextUser.name} reativado.`,
+          userId: actorId ?? null,
+        },
+      });
+
+      return nextUser;
+    });
+
+    return this.safeUser(updated);
+  }
+
   async resetPassword(id: string, dto: ResetPasswordDto, actorId?: string | null) {
     const user = await this.prisma.user.findUnique({
       where: { id },

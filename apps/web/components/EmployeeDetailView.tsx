@@ -11,6 +11,7 @@ import {
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import type { Asset, Assignment, AuditLog, Employee } from "@/lib/types";
 import AppShell from "./AppShell";
+import EditEmployeeModal from "./EditEmployeeModal";
 import EmployeeAssignmentsModal from "./EmployeeAssignmentsModal";
 
 function formatDate(value?: string | null) {
@@ -101,6 +102,10 @@ function assetFriendlyLabel(asset?: Asset | null) {
   return parts.length > 0 ? parts.join(" ") : null;
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function formatEmployeeAuditDescription(entry: EmployeeAuditEntry) {
   const rawDescription = entry.log.description?.trim() ?? "";
 
@@ -111,8 +116,16 @@ function formatEmployeeAuditDescription(entry: EmployeeAuditEntry) {
   const friendlyLabel = assetFriendlyLabel(entry.asset);
   const assetCode = entry.asset.internalCode;
   const normalizedDescription = rawDescription.replace(/^Asset\b/i, "Ativo");
+
+  if (
+    normalizedDescription.startsWith(`Ativo ${assetCode} —`) ||
+    normalizedDescription.startsWith(`Ativo ${assetCode} -`)
+  ) {
+    return normalizedDescription;
+  }
+
   const message = normalizedDescription.replace(
-    /^(?:Ativo|Asset)\s+[^\s]+\s*/i,
+    new RegExp(`^Ativo\\s+${escapeRegExp(assetCode)}\\s*`, "i"),
     "",
   );
 
@@ -284,7 +297,17 @@ export default function EmployeeDetailView({ employeeId }: { employeeId: string 
           </Link>
           {employee?.id ? (
             <>
-              <EmployeeAssignmentsModal employee={employee} />
+              <EditEmployeeModal
+                employee={employee}
+                onUpdated={(updatedEmployee) => {
+                  setEmployee(updatedEmployee);
+                  setRefreshKey((current) => current + 1);
+                }}
+              />
+              <EmployeeAssignmentsModal
+                employee={employee}
+                onChanged={() => setRefreshKey((current) => current + 1)}
+              />
             </>
           ) : null}
         </div>
@@ -340,6 +363,14 @@ export default function EmployeeDetailView({ employeeId }: { employeeId: string 
                 </div>
                 <div className="mt-1 text-sm font-medium [color:var(--text-primary)]">
                   {employee.position ?? "-"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] [color:var(--text-muted)]">
+                  Localização padrão
+                </div>
+                <div className="mt-1 text-sm font-medium [color:var(--text-primary)]">
+                  {employee.location?.name ?? "-"}
                 </div>
               </div>
               <div>

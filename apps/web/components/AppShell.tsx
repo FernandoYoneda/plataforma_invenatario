@@ -27,7 +27,7 @@ export default function AppShell({
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { theme, setTheme } = useTheme();
-  const { user, loading } = useAuth();
+  const { user, loadingAuth, error } = useAuth();
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -53,6 +53,36 @@ export default function AppShell({
 
   return (
     <main className="app-shell">
+      {loadingAuth ? (
+        <section className="app-main">
+          <div className="app-content app-content-wide">
+            <header className="app-header">
+              <div className="app-header-copy">
+                <div className="h-4 w-32 rounded-full bg-[var(--surface-soft)]" />
+                <div className="mt-4 h-8 w-64 rounded-full bg-[var(--surface-soft)]" />
+                <div className="mt-4 h-4 w-full max-w-2xl rounded-full bg-[var(--surface-soft)]" />
+              </div>
+              <div className="app-header-actions">
+                <div className="h-10 w-48 rounded-full bg-[var(--surface-soft)]" />
+                <div className="h-10 w-56 rounded-full bg-[var(--surface-soft)]" />
+              </div>
+            </header>
+
+            <div className="space-y-4">
+              <div className="h-28 rounded-[30px] bg-[var(--surface-soft)]" />
+              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="h-28 rounded-[26px] bg-[var(--surface-soft)]" />
+                <div className="h-28 rounded-[26px] bg-[var(--surface-soft)]" />
+                <div className="h-28 rounded-[26px] bg-[var(--surface-soft)]" />
+              </div>
+              <div className="h-80 rounded-[30px] bg-[var(--surface-soft)]" />
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {loadingAuth ? null : (
+        <>
       <button
         type="button"
         className="mobile-nav-toggle"
@@ -95,7 +125,11 @@ export default function AppShell({
 
             <div className="app-header-actions">
               <div className="status-pill hidden max-w-[18rem] truncate sm:inline-flex">
-                {loading ? "Carregando perfil..." : user ? `${user.name} • ${roleLabel(user.role)}` : "Perfil indisponível"}
+                {loadingAuth
+                  ? "Carregando perfil..."
+                  : user
+                    ? `${user.name} • ${roleLabel(user.role)}`
+                    : error ?? "Perfil indisponível"}
               </div>
               <GlobalSearch />
               {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
@@ -105,6 +139,8 @@ export default function AppShell({
           <div className="app-page-body">{children}</div>
         </div>
       </section>
+        </>
+      )}
     </main>
   );
 }

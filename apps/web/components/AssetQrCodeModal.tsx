@@ -121,12 +121,28 @@ export async function printAssetQrLabel(
   }
 }
 
-export default function AssetQrCodeModal({ asset }: { asset: Asset }) {
-  const [open, setOpen] = useState(false);
+export default function AssetQrCodeModal({
+  asset,
+  open: openProp,
+  onOpenChange,
+  triggerClassName,
+  hideTrigger,
+  onTrigger,
+}: {
+  asset: Asset;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  triggerClassName?: string;
+  hideTrigger?: boolean;
+  onTrigger?: () => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [assetUrl, setAssetUrl] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
 
   const title = useMemo(() => assetQrTitle(asset), [asset]);
 
@@ -256,10 +272,19 @@ export default function AssetQrCodeModal({ asset }: { asset: Asset }) {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="action-button">
-        <QrIcon />
-        QR Code
-      </button>
+      {hideTrigger ? null : (
+        <button
+          type="button"
+          onClick={() => {
+            onTrigger?.();
+            setOpen(true);
+          }}
+          className={`action-button ${triggerClassName ?? ""}`.trim()}
+        >
+          <QrIcon />
+          QR Code
+        </button>
+      )}
 
       {open && mounted ? createPortal(modal, document.body) : null}
     </>
