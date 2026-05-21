@@ -66,8 +66,14 @@ export class AssetsController {
     @Req() req: AuthenticatedRequest,
     @UploadedFile() file?: UploadedAssetFile,
     @Body('mapping') mapping?: string,
+    @Body('autoGenerateCodes') autoGenerateCodes?: string,
   ) {
-    return this.assetsService.importAssets(file, mapping, req.user?.id);
+    return this.assetsService.importAssets(
+      file,
+      mapping,
+      autoGenerateCodes,
+      req.user?.id,
+    );
   }
 
   @Get()

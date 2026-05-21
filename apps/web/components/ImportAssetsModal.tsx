@@ -60,8 +60,8 @@ const FIELD_CONFIGS: Array<{
   {
     field: "internalCode",
     label: "Código",
-    required: true,
-    help: "Código interno do ativo.",
+    required: false,
+    help: "Opcional quando a geração automática estiver ativa.",
   },
   {
     field: "type",
@@ -240,6 +240,7 @@ function valueByMapping(row: ParsedRow, mapping: MappingState, field: ImportFiel
 function validateRows(
   preview: PreviewState,
   mapping: MappingState,
+  autoGenerateCodes: boolean,
   assets: Asset[],
   categories: Category[],
   locations: Location[],
@@ -268,7 +269,9 @@ function validateRows(
     const locationName = valueByMapping(row, mapping, "locationName");
     const status = valueByMapping(row, mapping, "status");
 
-    if (!code) errors.push("Código é obrigatório");
+    if (!code && !autoGenerateCodes) {
+      errors.push("Código é obrigatório quando a geração automática está desativada");
+    }
     if (!typeInput) errors.push("Tipo e obrigatorio");
     if (!brand) errors.push("Marca e obrigatoria");
     if (!model) errors.push("Modelo e obrigatorio");
@@ -341,7 +344,6 @@ function buildDefaultMapping(headers: string[]) {
 
 function downloadCsvTemplate() {
   const headers = [
-    "codigo",
     "tipo",
     "marca",
     "modelo",
@@ -354,7 +356,6 @@ function downloadCsvTemplate() {
   ];
 
   const example = [
-    "TI-EXEMPLO-001",
     "Notebook",
     "Dell",
     "Latitude 5440",
@@ -394,6 +395,7 @@ export default function ImportAssetsModal({
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [autoGenerateCodes, setAutoGenerateCodes] = useState(true);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [mapping, setMapping] = useState<MappingState>(() =>
     buildDefaultMapping([]),
@@ -424,8 +426,15 @@ export default function ImportAssetsModal({
 
   const validatedRows = useMemo(() => {
     if (!preview) return [];
-    return validateRows(preview, mapping, assets, categories, locations);
-  }, [assets, categories, locations, mapping, preview]);
+    return validateRows(
+      preview,
+      mapping,
+      autoGenerateCodes,
+      assets,
+      categories,
+      locations,
+    );
+  }, [assets, autoGenerateCodes, categories, locations, mapping, preview]);
 
   const validCount = validatedRows.filter((row) => row.isValid).length;
   const invalidCount = validatedRows.length - validCount;
@@ -463,6 +472,7 @@ export default function ImportAssetsModal({
 
   function resetForm() {
     setFile(null);
+    setAutoGenerateCodes(true);
     setPreview(null);
     setMapping(buildDefaultMapping([]));
     setPreviewError(null);
@@ -489,7 +499,9 @@ export default function ImportAssetsModal({
     setPreviewError(null);
 
     try {
-      const result = await importAssets(file, mapping, token);
+      const result = await importAssets(file, mapping, token, {
+        autoGenerateCodes,
+      });
       setImportResult(result);
       onImported(result.imported);
 
@@ -579,6 +591,19 @@ export default function ImportAssetsModal({
                     <p className="mt-2 text-xs [color:var(--text-secondary)]">
                       {file ? `Arquivo selecionado: ${file.name}` : "Nenhum arquivo selecionado."}
                     </p>
+
+                    <label className="mt-4 flex items-center gap-2 text-sm [color:var(--text-primary)]">
+                      <input
+                        type="checkbox"
+                        checked={autoGenerateCodes}
+                        onChange={(event) =>
+                          setAutoGenerateCodes(event.target.checked)
+                        }
+                        disabled={uploading}
+                        className="h-4 w-4"
+                      />
+                      <span>Gerar códigos automaticamente</span>
+                    </label>
                   </section>
 
                   <section className="surface-soft rounded-[24px] px-4 py-4">
@@ -597,36 +622,43 @@ export default function ImportAssetsModal({
                     </div>
 
                     <div className="mt-4 space-y-3">
-                      {FIELD_CONFIGS.map((field) => (
-                        <label key={field.field} className="block text-sm">
-                          <span className="font-medium [color:var(--text-primary)]">
-                            {field.label} {field.required ? "*" : ""}
-                          </span>
-                          <select
-                            value={mapping[field.field]}
-                            onChange={(event) =>
-                              setMapping((current) => ({
-                                ...current,
-                                [field.field]: event.target.value,
-                              }))
-                            }
-                            className="brand-input mt-1.5"
-                            disabled={!preview || uploading}
-                          >
-                            <option value="">
-                              {field.required ? "Selecione uma coluna" : "Nao importar"}
-                            </option>
-                            {preview?.headers.map((header) => (
-                              <option key={header} value={header}>
-                                {header}
+                      {FIELD_CONFIGS.map((field) => {
+                        const fieldRequired =
+                          field.field === "internalCode"
+                            ? !autoGenerateCodes
+                            : field.required;
+
+                        return (
+                          <label key={field.field} className="block text-sm">
+                            <span className="font-medium [color:var(--text-primary)]">
+                              {field.label} {fieldRequired ? "*" : ""}
+                            </span>
+                            <select
+                              value={mapping[field.field]}
+                              onChange={(event) =>
+                                setMapping((current) => ({
+                                  ...current,
+                                  [field.field]: event.target.value,
+                                }))
+                              }
+                              className="brand-input mt-1.5"
+                              disabled={!preview || uploading}
+                            >
+                              <option value="">
+                                {fieldRequired ? "Selecione uma coluna" : "Nao importar"}
                               </option>
-                            ))}
-                          </select>
-                          <div className="mt-1 text-xs [color:var(--text-secondary)]">
-                            {field.help}
-                          </div>
-                        </label>
-                      ))}
+                              {preview?.headers.map((header) => (
+                                <option key={header} value={header}>
+                                  {header}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="mt-1 text-xs [color:var(--text-secondary)]">
+                              {field.help}
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
                   </section>
 
@@ -727,7 +759,7 @@ export default function ImportAssetsModal({
                         {validatedRows.slice(0, 50).map((row) => (
                           <tr key={row.rowNumber}>
                             <td className="cell-strong">{row.rowNumber}</td>
-                            <td>{row.code || "-"}</td>
+                            <td>{row.code || (autoGenerateCodes ? "Automatico" : "-")}</td>
                             <td>{row.preview.type || "-"}</td>
                             <td>{row.preview.brand || "-"}</td>
                             <td>{row.preview.model || "-"}</td>

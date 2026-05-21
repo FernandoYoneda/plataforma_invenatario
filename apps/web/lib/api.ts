@@ -15,6 +15,9 @@ import type {
   Location,
   ReturnAssignmentInput,
   AssetImportResult,
+  AssetMoneyInput,
+  AssetStatus,
+  AssetType,
   SystemUser,
   UpdateAssetInput,
   UpdateEmployeeInput,
@@ -33,6 +36,239 @@ type RequestOptions = {
 type LoginResponse = {
   accessToken: string;
 };
+
+type AssetWritePayload = {
+  type?: AssetType;
+  brand?: string;
+  model?: string | null;
+  serialNumber?: string | null;
+  valueCents?: number | null;
+  status?: AssetStatus;
+  notes?: string | null;
+  categoryId?: string | null;
+  locationId?: string | null;
+};
+
+type AssetImportMappingField =
+  | "internalCode"
+  | "type"
+  | "brand"
+  | "model"
+  | "serialNumber"
+  | "valueCents"
+  | "notes"
+  | "categoryName"
+  | "locationName"
+  | "status";
+
+const ASSET_TYPE_ALIASES: Record<string, AssetType> = {
+  desktop: "DESKTOP",
+  computador: "DESKTOP",
+  "computador desktop": "DESKTOP",
+  pc: "DESKTOP",
+  notebook: "NOTEBOOK",
+  laptop: "NOTEBOOK",
+  monitor: "MONITOR",
+  mouse: "MOUSE",
+  teclado: "TECLADO",
+  keyboard: "TECLADO",
+  outro: "OUTRO",
+  other: "OUTRO",
+};
+
+const ASSET_IMPORT_MAPPING_FIELDS = new Set<AssetImportMappingField>([
+  "internalCode",
+  "type",
+  "brand",
+  "model",
+  "serialNumber",
+  "valueCents",
+  "notes",
+  "categoryName",
+  "locationName",
+  "status",
+]);
+
+const ASSET_IMPORT_MAPPING_ALIASES: Record<string, AssetImportMappingField> = {
+  serial: "serialNumber",
+  assetSerial: "serialNumber",
+  value: "valueCents",
+  valueInCents: "valueCents",
+  purchaseValue: "valueCents",
+  purchaseValueCents: "valueCents",
+  purchaseValueInCents: "valueCents",
+};
+
+function normalizeAssetText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeAssetType(value: unknown) {
+  if (typeof value !== "string") return undefined;
+
+  const normalized = normalizeAssetText(value);
+  return (
+    ASSET_TYPE_ALIASES[normalized] ?? value.trim().toUpperCase()
+  ) as AssetType;
+}
+
+function readField(source: Record<string, unknown>, names: string[]) {
+  for (const name of names) {
+    if (
+      Object.prototype.hasOwnProperty.call(source, name) &&
+      source[name] !== undefined
+    ) {
+      return source[name];
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeNullableString(value: unknown) {
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function parseNumberLike(value: AssetMoneyInput) {
+  if (value === null) return null;
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  }
+
+  const text = value.trim();
+  if (!text) return null;
+
+  const cleaned = text.replace(/[^\d,.-]/g, "");
+  if (!cleaned) return null;
+
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  const normalized =
+    lastComma >= 0 && lastDot >= 0
+      ? lastComma > lastDot
+        ? cleaned.replace(/\./g, "").replace(",", ".")
+        : cleaned.replace(/,/g, "")
+      : cleaned.replace(",", ".");
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function normalizeCents(value: unknown) {
+  if (typeof value !== "string" && typeof value !== "number" && value !== null) {
+    return undefined;
+  }
+
+  const parsed = parseNumberLike(value);
+  return parsed == null ? null : Math.round(parsed);
+}
+
+function normalizeCurrencyToCents(value: unknown) {
+  if (typeof value !== "string" && typeof value !== "number" && value !== null) {
+    return undefined;
+  }
+
+  const parsed = parseNumberLike(value);
+  return parsed == null ? null : Math.round(parsed * 100);
+}
+
+function normalizeAssetWritePayload(
+  payload: CreateAssetInput | UpdateAssetInput,
+): AssetWritePayload {
+  const source = payload as Record<string, unknown>;
+  const result: AssetWritePayload = {};
+
+  const type = normalizeAssetType(readField(source, ["type"]));
+  if (type !== undefined) {
+    result.type = type;
+  }
+
+  const brand = readField(source, ["brand"]);
+  if (typeof brand === "string") {
+    result.brand = brand;
+  }
+
+  const model = normalizeNullableString(readField(source, ["model"]));
+  if (model !== undefined) {
+    result.model = model;
+  }
+
+  const serialNumber = normalizeNullableString(
+    readField(source, ["serialNumber", "serial", "assetSerial"]),
+  );
+  if (serialNumber !== undefined) {
+    result.serialNumber = serialNumber;
+  }
+
+  const centsValue = normalizeCents(
+    readField(source, [
+      "valueCents",
+      "valueInCents",
+      "purchaseValueCents",
+      "purchaseValueInCents",
+    ]),
+  );
+  const currencyValue = normalizeCurrencyToCents(
+    readField(source, ["value", "purchaseValue"]),
+  );
+  const valueCents = centsValue !== undefined ? centsValue : currencyValue;
+  if (valueCents !== undefined) {
+    result.valueCents = valueCents;
+  }
+
+  const status = readField(source, ["status"]);
+  if (typeof status === "string") {
+    result.status = status as AssetStatus;
+  }
+
+  const notes = normalizeNullableString(readField(source, ["notes"]));
+  if (notes !== undefined) {
+    result.notes = notes;
+  }
+
+  const categoryId = normalizeNullableString(readField(source, ["categoryId"]));
+  if (categoryId !== undefined) {
+    result.categoryId = categoryId;
+  }
+
+  const locationId = normalizeNullableString(readField(source, ["locationId"]));
+  if (locationId !== undefined) {
+    result.locationId = locationId;
+  }
+
+  return result;
+}
+
+function normalizeAssetImportMapping(
+  mapping: Record<string, string | null | undefined>,
+) {
+  const result: Partial<Record<AssetImportMappingField, string>> = {};
+
+  for (const [key, value] of Object.entries(mapping)) {
+    const importField = key as AssetImportMappingField;
+    const target = ASSET_IMPORT_MAPPING_FIELDS.has(importField)
+      ? importField
+      : ASSET_IMPORT_MAPPING_ALIASES[key];
+    const trimmed = typeof value === "string" ? value.trim() : "";
+
+    if (target && trimmed && !result[target]) {
+      result[target] = trimmed;
+    }
+  }
+
+  return result;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -382,7 +618,7 @@ export async function createAsset(
 ) {
   return request<Asset>("/assets", {
     method: "POST",
-    body: payload,
+    body: normalizeAssetWritePayload(payload),
     token,
   });
 }
@@ -391,10 +627,18 @@ export async function importAssets(
   file: File,
   mapping: Record<string, string | null | undefined>,
   token?: string | null,
+  options: { autoGenerateCodes?: boolean } = {},
 ) {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("mapping", JSON.stringify(mapping));
+  formData.append(
+    "mapping",
+    JSON.stringify(normalizeAssetImportMapping(mapping)),
+  );
+  formData.append(
+    "autoGenerateCodes",
+    String(options.autoGenerateCodes ?? true),
+  );
 
   const headers = new Headers();
 
@@ -423,7 +667,7 @@ export async function updateAsset(
 ) {
   return request<Asset>(`/assets/${assetId}`, {
     method: "PATCH",
-    body: payload,
+    body: normalizeAssetWritePayload(payload),
     token,
   });
 }

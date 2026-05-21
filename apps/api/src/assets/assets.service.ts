@@ -47,6 +47,20 @@ type AssetImportResult = {
   imported: AssetWithRelations[];
 };
 
+type AssetImportCandidate = {
+  rowNumber: number;
+  internalCode?: string;
+  type: AssetType;
+  brand: string;
+  model: string;
+  serialNumber: string | null;
+  valueCents: number | null;
+  notes: string | null;
+  categoryId: string | null;
+  locationId: string | null;
+  status: AssetStatus;
+};
+
 const FIELD_ALIASES: Record<AssetImportField, string[]> = {
   internalCode: ['codigo', 'código', 'codigo interno', 'código interno'],
   type: ['tipo'],
@@ -195,6 +209,27 @@ export class AssetsService {
     return null;
   }
 
+  private parseBoolean(value: unknown, defaultValue: boolean) {
+    if (value === undefined || value === null || value === '') {
+      return defaultValue;
+    }
+
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    const normalized = this.normalizeText(value);
+    if (['true', '1', 'sim', 'yes', 'on'].includes(normalized)) {
+      return true;
+    }
+
+    if (['false', '0', 'nao', 'não', 'no', 'off'].includes(normalized)) {
+      return false;
+    }
+
+    return defaultValue;
+  }
+
   private parseImportMapping(mapping?: string | null): AssetImportMapping {
     if (!mapping) {
       return {};
@@ -298,6 +333,7 @@ export class AssetsService {
   async importAssets(
     file: { buffer?: Buffer; originalname?: string } | undefined,
     mappingJson?: string,
+    autoGenerateCodesInput?: string | boolean | null,
     userId?: string | null,
   ): Promise<AssetImportResult> {
     if (!file?.buffer || !file.originalname) {
@@ -305,6 +341,7 @@ export class AssetsService {
     }
 
     const mapping = this.parseImportMapping(mappingJson);
+    const autoGenerateCodes = this.parseBoolean(autoGenerateCodesInput, true);
     const { headers, rows } = this.readSpreadsheetRows(file);
 
     if (headers.length === 0 || rows.length === 0) {
@@ -325,7 +362,7 @@ export class AssetsService {
     };
 
     const missingRequired = (Object.entries({
-      Codigo: resolved.internalCode,
+      ...(autoGenerateCodes ? {} : { Codigo: resolved.internalCode }),
       Tipo: resolved.type,
       Marca: resolved.brand,
       Modelo: resolved.model,
@@ -355,6 +392,7 @@ export class AssetsService {
     const seenCodes = new Set<string>();
     const imported: AssetWithRelations[] = [];
     const errors: AssetImportError[] = [];
+    const candidates: AssetImportCandidate[] = [];
 
     for (let index = 0; index < rows.length; index += 1) {
       const rowNumber = index + 2;
@@ -390,19 +428,23 @@ export class AssetsService {
       const type = this.parseAssetType(typeInput);
       const normalizedCode = this.normalizeHeader(internalCode ?? '');
 
-      if (!internalCode) rowErrors.push('Codigo e obrigatorio');
+      if (!internalCode && !autoGenerateCodes) {
+        rowErrors.push('Codigo e obrigatorio quando a geracao automatica esta desativada');
+      }
       if (!type) rowErrors.push('Tipo invalido');
       if (!brand) rowErrors.push('Marca e obrigatoria');
       if (!model) rowErrors.push('Modelo e obrigatorio');
 
       if (internalCode) {
         if (existingCodes.has(normalizedCode)) {
-          rowErrors.push('Codigo duplicado no banco');
+          rowErrors.push(`Codigo ${internalCode} ja existe no banco`);
         }
 
         if (seenCodes.has(normalizedCode)) {
-          rowErrors.push('Codigo duplicado na planilha');
+          rowErrors.push(`Codigo ${internalCode} duplicado na planilha`);
         }
+
+        seenCodes.add(normalizedCode);
       }
 
       if (type && this.typedAssets.has(type) && valueCents == null) {
@@ -436,50 +478,81 @@ export class AssetsService {
         continue;
       }
 
-      try {
-        const asset = await this.prisma.$transaction(async (tx) => {
-          const created = await tx.asset.create({
-            data: {
-              internalCode: internalCode as string,
-              type: type as AssetType,
-              brand: brand as string,
-              model: model ?? null,
-              serialNumber,
-              valueCents: valueCents ?? null,
-              notes,
-              categoryId,
-              locationId,
-              status,
-            },
-            include: {
-              category: true,
-              location: true,
-            },
-          });
+      candidates.push({
+        rowNumber,
+        internalCode,
+        type: type as AssetType,
+        brand: brand as string,
+        model: model as string,
+        serialNumber,
+        valueCents,
+        notes,
+        categoryId,
+        locationId,
+        status,
+      });
+    }
 
-          await tx.auditLog.create({
-            data: {
-              action: 'ASSET_IMPORTED',
-              entityType: 'Asset',
-              entityId: created.id,
-              description: `Asset ${created.internalCode} importado em lote`,
-              userId: userId ?? null,
+    if (candidates.length > 0) {
+      try {
+        const reservedCodes = new Set([
+          ...existingCodes,
+          ...candidates
+            .map((candidate) => candidate.internalCode)
+            .filter((code): code is string => Boolean(code))
+            .map((code) => this.normalizeHeader(code)),
+        ]);
+
+        const createdAssets = await this.prisma.$transaction(async (tx) => {
+          const createdAssets: AssetWithRelations[] = [];
+
+          for (const candidate of candidates) {
+            const internalCode =
+              candidate.internalCode ??
+              (await this.generateAvailableInternalCode(tx, reservedCodes));
+
+            const created = await tx.asset.create({
+              data: {
+                internalCode,
+                type: candidate.type,
+                brand: candidate.brand,
+                model: candidate.model,
+                serialNumber: candidate.serialNumber,
+                valueCents: candidate.valueCents,
+                notes: candidate.notes,
+                categoryId: candidate.categoryId,
+                locationId: candidate.locationId,
+                status: candidate.status,
+              },
+              include: {
+                category: true,
+                location: true,
               },
             });
 
-          return created as AssetWithRelations;
+            await tx.auditLog.create({
+              data: {
+                action: 'ASSET_IMPORTED',
+                entityType: 'Asset',
+                entityId: created.id,
+                description: `Asset ${created.internalCode} importado em lote`,
+                userId: userId ?? null,
+              },
+            });
+
+            createdAssets.push(created as AssetWithRelations);
+          }
+
+          return createdAssets;
         });
 
-        imported.push(asset);
-        existingCodes.add(normalizedCode);
-        seenCodes.add(normalizedCode);
+        imported.push(...createdAssets);
       } catch (err: unknown) {
-        errors.push({
-          rowNumber,
-          code: internalCode ?? null,
-          message:
-            err instanceof Error ? err.message : 'Nao foi possivel importar a linha',
-        });
+        throw new BadRequestException(
+          err instanceof Error
+            ? `Nao foi possivel importar os ativos validos: ${err.message}`
+            : 'Nao foi possivel importar os ativos validos',
+        );
       }
     }
 
@@ -500,16 +573,47 @@ export class AssetsService {
     }
   }
 
-  private async generateInternalCode(): Promise<string> {
-    return this.prisma.$transaction(async (tx) => {
-      const counter = await tx.counter.update({
+  private formatInternalCode(value: number) {
+    return `TI-${String(value).padStart(6, '0')}`;
+  }
+
+  private async generateAvailableInternalCode(
+    tx: Prisma.TransactionClient,
+    reservedCodes: Set<string>,
+  ) {
+    for (;;) {
+      const counter = await tx.counter.upsert({
         where: { key: 'asset' },
-        data: { nextNumber: { increment: 1 } },
+        update: { nextNumber: { increment: 1 } },
+        create: { key: 'asset', nextNumber: 2 },
       });
 
-      const current = counter.nextNumber - 1;
-      return `TI-${String(current).padStart(6, '0')}`;
-    });
+      const internalCode = this.formatInternalCode(counter.nextNumber - 1);
+      const normalizedCode = this.normalizeHeader(internalCode);
+
+      if (reservedCodes.has(normalizedCode)) {
+        continue;
+      }
+
+      const existing = await tx.asset.findUnique({
+        where: { internalCode },
+        select: { id: true },
+      });
+
+      if (existing) {
+        reservedCodes.add(normalizedCode);
+        continue;
+      }
+
+      reservedCodes.add(normalizedCode);
+      return internalCode;
+    }
+  }
+
+  private async generateInternalCode(): Promise<string> {
+    return this.prisma.$transaction((tx) =>
+      this.generateAvailableInternalCode(tx, new Set()),
+    );
   }
 
   async create(dto: CreateAssetDto, userId?: string | null) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -22,7 +23,10 @@ export default function DeleteEmployeeButton({
   const router = useRouter();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   function close() {
     if (!loading) {
@@ -132,69 +136,74 @@ export default function DeleteEmployeeButton({
         {employee.isActive ? "Inativar" : "Reativar"}
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-[99999]" onClick={close}>
-          <div className="absolute inset-0 bg-[rgba(23,58,67,0.66)] backdrop-blur-[3px]" />
+      {open && mounted
+        ? createPortal(
+            <div className="fixed inset-0 z-[99999]" onClick={close}>
+              <div className="absolute inset-0 bg-[rgba(23,58,67,0.66)] backdrop-blur-[3px]" />
 
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div
-              className="glass-panel w-full max-w-md overflow-hidden rounded-[30px]"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="border-b px-6 py-5 [border-color:var(--border-soft)]">
-                <p className="eyebrow">Confirmacao</p>
-                <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
-                  {employee.isActive ? "Inativar funcionário" : "Reativar funcionário"}
-                </h2>
-              </div>
-
-              <div className="px-6 py-5 text-sm [color:var(--text-secondary)]">
-                <p>
-                  Voce tem certeza que deseja{" "}
-                  {employee.isActive ? "inativar" : "reativar"}{" "}
-                  <span className="font-medium [color:var(--text-primary)]">
-                    {employee.name}
-                  </span>
-                  ?
-                </p>
-                <p className="mt-3">
-                  O historico e a auditoria permanecem intactos.
-                </p>
-              </div>
-
-              <div className="flex justify-end gap-3 border-t px-6 py-5 [border-color:var(--border-soft)]">
-                <button
-                  type="button"
-                  onClick={close}
-                  disabled={loading}
-                  className="btn-secondary px-4 py-3 text-sm disabled:opacity-50"
+              <div className="absolute inset-0 flex items-center justify-center p-4">
+                <div
+                  className="glass-panel w-full max-w-md overflow-hidden rounded-[30px]"
+                  onClick={(event) => event.stopPropagation()}
                 >
-                  Cancelar
-                </button>
+                  <div className="border-b px-6 py-5 [border-color:var(--border-soft)]">
+                    <p className="eyebrow">Confirmacao</p>
+                    <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
+                      {employee.isActive
+                        ? "Inativar funcionário"
+                        : "Reativar funcionário"}
+                    </h2>
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={handleToggle}
-                  disabled={loading}
-                  className={
-                    employee.isActive
-                      ? "btn-danger px-5 py-3 text-sm disabled:opacity-60"
-                      : "btn-primary px-5 py-3 text-sm disabled:opacity-60"
-                  }
-                >
-                  {loading
-                    ? employee.isActive
-                      ? "Inativando..."
-                      : "Reativando..."
-                    : employee.isActive
-                      ? "Inativar"
-                      : "Reativar"}
-                </button>
+                  <div className="px-6 py-5 text-sm [color:var(--text-secondary)]">
+                    <p>
+                      Voce tem certeza que deseja{" "}
+                      {employee.isActive ? "inativar" : "reativar"}{" "}
+                      <span className="font-medium [color:var(--text-primary)]">
+                        {employee.name}
+                      </span>
+                      ?
+                    </p>
+                    <p className="mt-3">
+                      O historico e a auditoria permanecem intactos.
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end gap-3 border-t px-6 py-5 [border-color:var(--border-soft)]">
+                    <button
+                      type="button"
+                      onClick={close}
+                      disabled={loading}
+                      className="btn-secondary px-4 py-3 text-sm disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleToggle}
+                      disabled={loading}
+                      className={
+                        employee.isActive
+                          ? "btn-danger px-5 py-3 text-sm disabled:opacity-60"
+                          : "btn-primary px-5 py-3 text-sm disabled:opacity-60"
+                      }
+                    >
+                      {loading
+                        ? employee.isActive
+                          ? "Inativando..."
+                          : "Reativando..."
+                        : employee.isActive
+                          ? "Inativar"
+                          : "Reativar"}
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

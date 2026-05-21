@@ -12,6 +12,19 @@ export type AssetStatus =
   | "MANUTENCAO"
   | "BAIXADO";
 
+export type AssetTypeInput =
+  | AssetType
+  | "Desktop"
+  | "Notebook"
+  | "Monitor"
+  | "Mouse"
+  | "Teclado"
+  | "Outro"
+  | "Computador"
+  | "Computador (Desktop)";
+
+export type AssetMoneyInput = string | number | null;
+
 export type Category = {
   id: string;
   name: string;
@@ -84,23 +97,38 @@ export type Assignment = {
 };
 
 export type CreateAssetInput = {
-  type: AssetType;
+  type: AssetTypeInput;
   brand: string;
   model?: string | null;
   serialNumber?: string | null;
+  serial?: string | null;
+  assetSerial?: string | null;
   valueCents?: number | null;
+  valueInCents?: AssetMoneyInput;
+  purchaseValueCents?: AssetMoneyInput;
+  purchaseValueInCents?: AssetMoneyInput;
+  value?: AssetMoneyInput;
+  purchaseValue?: AssetMoneyInput;
   status?: AssetStatus;
   notes?: string | null;
-  categoryId?: string;
-  locationId?: string;
+  categoryId?: string | null;
+  locationId?: string | null;
 };
 
 export type UpdateAssetInput = {
-  type?: AssetType;
+  type?: AssetTypeInput;
   brand?: string;
   model?: string | null;
   serialNumber?: string | null;
+  serial?: string | null;
+  assetSerial?: string | null;
   status?: AssetStatus;
+  valueCents?: number | null;
+  valueInCents?: AssetMoneyInput;
+  purchaseValueCents?: AssetMoneyInput;
+  purchaseValueInCents?: AssetMoneyInput;
+  value?: AssetMoneyInput;
+  purchaseValue?: AssetMoneyInput;
   notes?: string | null;
   categoryId?: string | null;
   locationId?: string | null;
