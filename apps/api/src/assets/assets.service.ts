@@ -8,6 +8,7 @@ import { AssetStatus, AssetType, Prisma } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AssetAttachmentsService } from './asset-attachments.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { FindAssetsQueryDto } from './dto/find-assets-query.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
@@ -26,6 +27,12 @@ type AssetImportField =
   | 'model'
   | 'serialNumber'
   | 'valueCents'
+  | 'purchaseDate'
+  | 'phoneNumber1'
+  | 'phoneNumber2'
+  | 'imei1'
+  | 'imei2'
+  | 'carrier'
   | 'notes'
   | 'categoryName'
   | 'locationName'
@@ -55,6 +62,12 @@ type AssetImportCandidate = {
   model: string;
   serialNumber: string | null;
   valueCents: number | null;
+  purchaseDate: Date | null;
+  phoneNumber1: string | null;
+  phoneNumber2: string | null;
+  imei1: string | null;
+  imei2: string | null;
+  carrier: string | null;
   notes: string | null;
   categoryId: string | null;
   locationId: string | null;
@@ -68,6 +81,12 @@ const FIELD_ALIASES: Record<AssetImportField, string[]> = {
   model: ['modelo'],
   serialNumber: ['serial', 'serial number', 'numero de serie', 'número de série'],
   valueCents: ['valor', 'valor r$', 'valor (r$)', 'preco', 'preço'],
+  purchaseDate: ['data de compra', 'data compra', 'purchase date', 'purchaseDate'],
+  phoneNumber1: ['telefone 1', 'telefone1', 'phone 1', 'phoneNumber1'],
+  phoneNumber2: ['telefone 2', 'telefone2', 'phone 2', 'phoneNumber2'],
+  imei1: ['imei 1', 'imei1'],
+  imei2: ['imei 2', 'imei2'],
+  carrier: ['operadora', 'carrier'],
   notes: ['observacoes', 'observações', 'observacao', 'observação', 'obs'],
   categoryName: ['categoria'],
   locationName: ['localizacao', 'localização', 'local'],
@@ -79,6 +98,7 @@ export class AssetsService {
   constructor(
     private prisma: PrismaService,
     @Optional() private readonly auditLogs?: AuditLogsService,
+    @Optional() private readonly assetAttachments?: AssetAttachmentsService,
   ) {}
 
   private readonly typedAssets = new Set<AssetType>([
@@ -146,6 +166,94 @@ export class AssetsService {
     return Math.round(parsed * 100);
   }
 
+  private dateFromParts(year: number, month: number, day: number) {
+    const parsed = new Date(Date.UTC(year, month - 1, day, 12));
+
+    if (
+      Number.isNaN(parsed.getTime()) ||
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() !== month - 1 ||
+      parsed.getUTCDate() !== day
+    ) {
+      return null;
+    }
+
+    return parsed;
+  }
+
+  private parseDateToDate(value: unknown) {
+    if (value === undefined || value === null || value === '') return null;
+
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      const parsed = XLSX.SSF.parse_date_code(value);
+      if (!parsed) return null;
+
+      return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d, 12));
+    }
+
+    const text = this.trimToUndefined(String(value));
+    if (!text) return null;
+
+    if (/^\d+(\.\d+)?$/.test(text)) {
+      return this.parseDateToDate(Number(text));
+    }
+
+    const brDate = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
+    if (brDate) {
+      const [, day, month, year] = brDate;
+      return this.dateFromParts(Number(year), Number(month), Number(day));
+    }
+
+    const isoDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    if (isoDate) {
+      const [, year, month, day] = isoDate;
+      return this.dateFromParts(Number(year), Number(month), Number(day));
+    }
+
+    const parsed = new Date(text);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private normalizeImei(value?: string | null) {
+    const normalized = this.trimToNull(value);
+    if (!normalized) return null;
+
+    return normalized.replace(/\D/g, '');
+  }
+
+  private isValidImei(value?: string | null) {
+    const normalized = this.normalizeImei(value);
+    return !normalized || /^\d{15}$/.test(normalized);
+  }
+
+  private normalizeValidatedImei(value: string | null | undefined, label: string) {
+    const normalized = this.normalizeImei(value);
+
+    if (normalized && !/^\d{15}$/.test(normalized)) {
+      throw new BadRequestException(`${label} deve conter exatamente 15 digitos`);
+    }
+
+    return normalized;
+  }
+
+  private parseOptionalPurchaseDate(value?: string | null) {
+    const hasValue =
+      value !== undefined &&
+      value !== null &&
+      (typeof value !== 'string' || value.trim().length > 0);
+    const parsed = this.parseDateToDate(value);
+
+    if (hasValue && !parsed) {
+      throw new BadRequestException('purchaseDate invalida');
+    }
+
+    return parsed;
+  }
+
   private parseAssetType(value: unknown) {
     const normalized = this.normalizeText(value)
       .replace(/[^a-z0-9]+/g, ' ')
@@ -175,6 +283,15 @@ export class AssetsService {
 
     if (normalized === 'teclado' || normalized === 'keyboard') {
       return AssetType.TECLADO;
+    }
+
+    if (
+      normalized === 'smartphone' ||
+      normalized === 'celular' ||
+      normalized === 'telefone' ||
+      normalized === 'phone'
+    ) {
+      return AssetType.SMARTPHONE;
     }
 
     if (normalized === 'outro' || normalized === 'other') {
@@ -287,14 +404,27 @@ export class AssetsService {
       throw new BadRequestException('Arquivo para importacao e obrigatorio');
     }
 
-    const isCsv = file.originalname.toLowerCase().endsWith('.csv');
-    const workbook = isCsv
-      ? XLSX.read(file.buffer.toString('utf8'), { type: 'string' })
-      : XLSX.read(file.buffer, { type: 'buffer' });
+    const lowerName = file.originalname.toLowerCase();
+    const isCsv = lowerName.endsWith('.csv');
+    const isXlsx = lowerName.endsWith('.xlsx');
+
+    if (!isCsv && !isXlsx) {
+      throw new BadRequestException('Formato invalido. Envie uma planilha .xlsx ou .csv.');
+    }
+
+    let workbook: XLSX.WorkBook;
+
+    try {
+      workbook = isCsv
+        ? XLSX.read(file.buffer.toString('utf8'), { type: 'string' })
+        : XLSX.read(file.buffer, { type: 'buffer' });
+    } catch {
+      throw new BadRequestException('Nao foi possivel ler a planilha.');
+    }
 
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) {
-      throw new BadRequestException('Arquivo sem planilha valida');
+      throw new BadRequestException('Planilha vazia ou sem aba valida');
     }
 
     const sheet = workbook.Sheets[sheetName];
@@ -345,7 +475,7 @@ export class AssetsService {
     const { headers, rows } = this.readSpreadsheetRows(file);
 
     if (headers.length === 0 || rows.length === 0) {
-      throw new BadRequestException('Arquivo precisa conter cabecalho e linhas de dados');
+      throw new BadRequestException('Planilha vazia. Informe cabecalho e linhas de dados.');
     }
 
     const resolved = {
@@ -355,6 +485,12 @@ export class AssetsService {
       model: this.inferHeader(headers, 'model', mapping),
       serialNumber: this.inferHeader(headers, 'serialNumber', mapping),
       valueCents: this.inferHeader(headers, 'valueCents', mapping),
+      purchaseDate: this.inferHeader(headers, 'purchaseDate', mapping),
+      phoneNumber1: this.inferHeader(headers, 'phoneNumber1', mapping),
+      phoneNumber2: this.inferHeader(headers, 'phoneNumber2', mapping),
+      imei1: this.inferHeader(headers, 'imei1', mapping),
+      imei2: this.inferHeader(headers, 'imei2', mapping),
+      carrier: this.inferHeader(headers, 'carrier', mapping),
       notes: this.inferHeader(headers, 'notes', mapping),
       categoryName: this.inferHeader(headers, 'categoryName', mapping),
       locationName: this.inferHeader(headers, 'locationName', mapping),
@@ -412,6 +548,25 @@ export class AssetsService {
       const serialNumber = this.trimToNull(
         resolved.serialNumber ? row[resolved.serialNumber] : undefined,
       );
+      const purchaseDateInput = resolved.purchaseDate
+        ? row[resolved.purchaseDate]
+        : undefined;
+      const purchaseDate = this.parseDateToDate(purchaseDateInput);
+      const phoneNumber1 = this.trimToNull(
+        resolved.phoneNumber1 ? row[resolved.phoneNumber1] : undefined,
+      );
+      const phoneNumber2 = this.trimToNull(
+        resolved.phoneNumber2 ? row[resolved.phoneNumber2] : undefined,
+      );
+      const imei1 = this.normalizeImei(
+        resolved.imei1 ? row[resolved.imei1] : undefined,
+      );
+      const imei2 = this.normalizeImei(
+        resolved.imei2 ? row[resolved.imei2] : undefined,
+      );
+      const carrier = this.trimToNull(
+        resolved.carrier ? row[resolved.carrier] : undefined,
+      );
       const notes = this.trimToNull(resolved.notes ? row[resolved.notes] : undefined);
       const categoryName = this.trimToUndefined(
         resolved.categoryName ? row[resolved.categoryName] : undefined,
@@ -451,6 +606,18 @@ export class AssetsService {
         rowErrors.push('Valor e obrigatorio para Desktop, Notebook e Monitor');
       }
 
+      if (this.trimToUndefined(purchaseDateInput) && !purchaseDate) {
+        rowErrors.push('Data de compra invalida');
+      }
+
+      if (!this.isValidImei(imei1)) {
+        rowErrors.push('IMEI 1 deve conter exatamente 15 digitos');
+      }
+
+      if (!this.isValidImei(imei2)) {
+        rowErrors.push('IMEI 2 deve conter exatamente 15 digitos');
+      }
+
       if (resolved.status && !status) {
         rowErrors.push('Status invalido');
       }
@@ -486,6 +653,12 @@ export class AssetsService {
         model: model as string,
         serialNumber,
         valueCents,
+        purchaseDate,
+        phoneNumber1,
+        phoneNumber2,
+        imei1,
+        imei2,
+        carrier,
         notes,
         categoryId,
         locationId,
@@ -519,6 +692,12 @@ export class AssetsService {
                 model: candidate.model,
                 serialNumber: candidate.serialNumber,
                 valueCents: candidate.valueCents,
+                purchaseDate: candidate.purchaseDate,
+                phoneNumber1: candidate.phoneNumber1,
+                phoneNumber2: candidate.phoneNumber2,
+                imei1: candidate.imei1,
+                imei2: candidate.imei2,
+                carrier: candidate.carrier,
                 notes: candidate.notes,
                 categoryId: candidate.categoryId,
                 locationId: candidate.locationId,
@@ -634,6 +813,12 @@ export class AssetsService {
         model: this.trimToNull(dto.model),
         serialNumber: this.trimToNull(dto.serialNumber),
         valueCents: dto.valueCents,
+        purchaseDate: this.parseOptionalPurchaseDate(dto.purchaseDate),
+        phoneNumber1: this.trimToNull(dto.phoneNumber1),
+        phoneNumber2: this.trimToNull(dto.phoneNumber2),
+        imei1: this.normalizeValidatedImei(dto.imei1, 'imei1'),
+        imei2: this.normalizeValidatedImei(dto.imei2, 'imei2'),
+        carrier: this.trimToNull(dto.carrier),
         status: dto.status ?? AssetStatus.ESTOQUE,
         notes: this.trimToNull(dto.notes),
         categoryId: this.trimToNullishId(dto.categoryId),
@@ -788,6 +973,24 @@ export class AssetsService {
         ...(dto.type !== undefined && { type: dto.type }),
         ...(dto.status !== undefined && { status: dto.status }),
         ...(dto.valueCents !== undefined && { valueCents: dto.valueCents }),
+        ...(dto.purchaseDate !== undefined && {
+          purchaseDate: this.parseOptionalPurchaseDate(dto.purchaseDate),
+        }),
+        ...(dto.phoneNumber1 !== undefined && {
+          phoneNumber1: this.trimToNull(dto.phoneNumber1),
+        }),
+        ...(dto.phoneNumber2 !== undefined && {
+          phoneNumber2: this.trimToNull(dto.phoneNumber2),
+        }),
+        ...(dto.imei1 !== undefined && {
+          imei1: this.normalizeValidatedImei(dto.imei1, 'imei1'),
+        }),
+        ...(dto.imei2 !== undefined && {
+          imei2: this.normalizeValidatedImei(dto.imei2, 'imei2'),
+        }),
+        ...(dto.carrier !== undefined && {
+          carrier: this.trimToNull(dto.carrier),
+        }),
         ...(dto.brand !== undefined && {
           brand: this.trimToUndefined(dto.brand) ?? exists.brand,
         }),
@@ -824,12 +1027,82 @@ export class AssetsService {
     return asset;
   }
 
-  async remove(id: string) {
+  async remove(
+    id: string,
+    userId?: string | null,
+    options: { confirmed?: boolean } = {},
+  ) {
     const exists = await this.prisma.asset.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Ativo nao encontrado');
 
-    return this.prisma.asset.delete({
-      where: { id },
+    const [activeAssignment, historyCount, attachments] = await Promise.all([
+      this.prisma.assignment.findFirst({
+        where: {
+          assetId: id,
+          returnedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      }),
+      this.prisma.assignment.count({
+        where: {
+          assetId: id,
+        },
+      }),
+      this.prisma.assetAttachment.findMany({
+        where: {
+          assetId: id,
+        },
+        select: {
+          id: true,
+          filePath: true,
+        },
+      }),
+    ]);
+
+    if (activeAssignment) {
+      throw new BadRequestException(
+        'Ativo possui atribuicao ativa. Devolva o ativo antes de excluir ou altere o status para BAIXADO quando aplicavel.',
+      );
+    }
+
+    if ((historyCount > 0 || attachments.length > 0) && !options.confirmed) {
+      throw new BadRequestException(
+        `Exclusao exige confirmacao: ativo possui ${historyCount} historico(s) de atribuicao e ${attachments.length} anexo(s).`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.assignment.deleteMany({
+        where: {
+          assetId: id,
+        },
+      });
+
+      await tx.assetAttachment.deleteMany({
+        where: {
+          assetId: id,
+        },
+      });
+
+      await tx.asset.delete({
+        where: { id },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          action: 'ASSET_DELETED',
+          entityType: 'Asset',
+          entityId: id,
+          description: `${this.describeAsset(exists)} excluido com ${historyCount} historico(s) e ${attachments.length} anexo(s) removido(s)`,
+          userId: userId ?? null,
+        },
+      });
     });
+
+    await this.assetAttachments?.removeStoredFiles(attachments);
+
+    return { ok: true };
   }
 }

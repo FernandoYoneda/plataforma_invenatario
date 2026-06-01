@@ -21,6 +21,7 @@ enum AssetType {
   MONITOR
   MOUSE
   TECLADO
+  SMARTPHONE
   OUTRO
 }
 
@@ -97,6 +98,12 @@ model Asset {
   model        String?
   serialNumber String?
   valueCents   Int?
+  purchaseDate DateTime?
+  phoneNumber1 String?
+  phoneNumber2 String?
+  imei1        String?
+  imei2        String?
+  carrier      String?
   status       AssetStatus @default(ESTOQUE)
   registeredAt DateTime    @default(now())
   notes        String?

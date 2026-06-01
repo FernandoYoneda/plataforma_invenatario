@@ -5,12 +5,20 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   Min,
 } from 'class-validator';
 import { AssetStatus, AssetType } from '@prisma/client';
 
 function trimString(value: unknown) {
   return typeof value === 'string' ? value.trim() : value;
+}
+
+function trimOptionalString(value: unknown) {
+  if (typeof value !== 'string') return value;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 export class CreateAssetDto {
@@ -37,6 +45,42 @@ export class CreateAssetDto {
   @IsInt()
   @Min(0)
   valueCents?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  purchaseDate?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  phoneNumber1?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  phoneNumber2?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @Matches(/^\d{15}$/, {
+    message: 'imei1 deve conter exatamente 15 digitos',
+  })
+  imei1?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimOptionalString(value))
+  @IsString()
+  @Matches(/^\d{15}$/, {
+    message: 'imei2 deve conter exatamente 15 digitos',
+  })
+  imei2?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  carrier?: string | null;
 
   @IsOptional()
   @IsEnum(AssetStatus)

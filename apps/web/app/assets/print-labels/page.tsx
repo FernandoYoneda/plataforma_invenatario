@@ -14,6 +14,7 @@ const TYPE_LABELS: Record<Asset["type"], string> = {
   MONITOR: "Monitor",
   MOUSE: "Mouse",
   TECLADO: "Teclado",
+  SMARTPHONE: "Smartphone",
   OUTRO: "Outro",
 };
 

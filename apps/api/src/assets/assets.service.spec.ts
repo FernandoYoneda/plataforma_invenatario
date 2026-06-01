@@ -56,10 +56,77 @@ describe('AssetsService', () => {
         model: 'Latitude 5400',
         serialNumber: 'ABC123',
         valueCents: 450000,
+        purchaseDate: null,
+        phoneNumber1: null,
+        phoneNumber2: null,
+        imei1: null,
+        imei2: null,
+        carrier: null,
         status: AssetStatus.ESTOQUE,
         notes: 'pronto para uso',
+        categoryId: undefined,
+        locationId: undefined,
       },
     });
+  });
+
+  it('creates smartphone assets with normalized optional corporate fields', async () => {
+    prismaMock.$transaction.mockResolvedValue('TI-000124');
+    prismaMock.asset.create.mockResolvedValue({ id: 'asset-2' });
+
+    await service.create({
+      type: AssetType.SMARTPHONE,
+      brand: ' Samsung ',
+      model: ' Galaxy S24 ',
+      purchaseDate: '2026-05-21',
+      phoneNumber1: ' (11) 99999-9999 ',
+      phoneNumber2: '',
+      imei1: '123 456 789 012 345',
+      imei2: null,
+      carrier: ' Vivo ',
+      status: AssetStatus.ESTOQUE,
+    });
+
+    expect(prismaMock.asset.create).toHaveBeenCalledWith({
+      data: {
+        internalCode: 'TI-000124',
+        type: AssetType.SMARTPHONE,
+        brand: 'Samsung',
+        model: 'Galaxy S24',
+        serialNumber: null,
+        valueCents: undefined,
+        purchaseDate: new Date(Date.UTC(2026, 4, 21, 12)),
+        phoneNumber1: '(11) 99999-9999',
+        phoneNumber2: null,
+        imei1: '123456789012345',
+        imei2: null,
+        carrier: 'Vivo',
+        status: AssetStatus.ESTOQUE,
+        notes: null,
+        categoryId: undefined,
+        locationId: undefined,
+      },
+    });
+  });
+
+  it('rejects smartphone assets with invalid IMEI', async () => {
+    await expect(
+      service.create({
+        type: AssetType.SMARTPHONE,
+        brand: 'Apple',
+        imei1: '123',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects invalid purchaseDate values', async () => {
+    await expect(
+      service.create({
+        type: AssetType.SMARTPHONE,
+        brand: 'Samsung',
+        purchaseDate: '31/02/2026',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects typed assets without valueCents', async () => {
@@ -102,6 +169,10 @@ describe('AssetsService', () => {
         ],
       },
       orderBy: { createdAt: 'desc' },
+      include: {
+        category: true,
+        location: true,
+      },
     });
   });
 

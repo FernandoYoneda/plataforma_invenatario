@@ -3,6 +3,7 @@ import type {
   Asset,
   AssetDetails,
   AssetAttachment,
+  BulkAssignmentResult,
   Assignment,
   AuthUser,
   Category,
@@ -43,6 +44,12 @@ type AssetWritePayload = {
   model?: string | null;
   serialNumber?: string | null;
   valueCents?: number | null;
+  purchaseDate?: string | null;
+  phoneNumber1?: string | null;
+  phoneNumber2?: string | null;
+  imei1?: string | null;
+  imei2?: string | null;
+  carrier?: string | null;
   status?: AssetStatus;
   notes?: string | null;
   categoryId?: string | null;
@@ -56,6 +63,12 @@ type AssetImportMappingField =
   | "model"
   | "serialNumber"
   | "valueCents"
+  | "purchaseDate"
+  | "phoneNumber1"
+  | "phoneNumber2"
+  | "imei1"
+  | "imei2"
+  | "carrier"
   | "notes"
   | "categoryName"
   | "locationName"
@@ -72,6 +85,10 @@ const ASSET_TYPE_ALIASES: Record<string, AssetType> = {
   mouse: "MOUSE",
   teclado: "TECLADO",
   keyboard: "TECLADO",
+  smartphone: "SMARTPHONE",
+  celular: "SMARTPHONE",
+  telefone: "SMARTPHONE",
+  phone: "SMARTPHONE",
   outro: "OUTRO",
   other: "OUTRO",
 };
@@ -83,6 +100,12 @@ const ASSET_IMPORT_MAPPING_FIELDS = new Set<AssetImportMappingField>([
   "model",
   "serialNumber",
   "valueCents",
+  "purchaseDate",
+  "phoneNumber1",
+  "phoneNumber2",
+  "imei1",
+  "imei2",
+  "carrier",
   "notes",
   "categoryName",
   "locationName",
@@ -97,6 +120,12 @@ const ASSET_IMPORT_MAPPING_ALIASES: Record<string, AssetImportMappingField> = {
   purchaseValue: "valueCents",
   purchaseValueCents: "valueCents",
   purchaseValueInCents: "valueCents",
+  purchaseDate: "purchaseDate",
+  phone1: "phoneNumber1",
+  phone2: "phoneNumber2",
+  telefone1: "phoneNumber1",
+  telefone2: "phoneNumber2",
+  operadora: "carrier",
 };
 
 function normalizeAssetText(value: string) {
@@ -137,6 +166,14 @@ function normalizeNullableString(value: unknown) {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeNullableDigits(value: unknown) {
+  const normalized = normalizeNullableString(value);
+  if (normalized === undefined || normalized === null) return normalized;
+
+  const digits = normalized.replace(/\D/g, "");
+  return digits.length > 0 ? digits : null;
 }
 
 function parseNumberLike(value: AssetMoneyInput) {
@@ -225,6 +262,36 @@ function normalizeAssetWritePayload(
   const valueCents = centsValue !== undefined ? centsValue : currencyValue;
   if (valueCents !== undefined) {
     result.valueCents = valueCents;
+  }
+
+  const purchaseDate = normalizeNullableString(readField(source, ["purchaseDate"]));
+  if (purchaseDate !== undefined) {
+    result.purchaseDate = purchaseDate;
+  }
+
+  const phoneNumber1 = normalizeNullableString(readField(source, ["phoneNumber1"]));
+  if (phoneNumber1 !== undefined) {
+    result.phoneNumber1 = phoneNumber1;
+  }
+
+  const phoneNumber2 = normalizeNullableString(readField(source, ["phoneNumber2"]));
+  if (phoneNumber2 !== undefined) {
+    result.phoneNumber2 = phoneNumber2;
+  }
+
+  const imei1 = normalizeNullableDigits(readField(source, ["imei1"]));
+  if (imei1 !== undefined) {
+    result.imei1 = imei1;
+  }
+
+  const imei2 = normalizeNullableDigits(readField(source, ["imei2"]));
+  if (imei2 !== undefined) {
+    result.imei2 = imei2;
+  }
+
+  const carrier = normalizeNullableString(readField(source, ["carrier"]));
+  if (carrier !== undefined) {
+    result.carrier = carrier;
   }
 
   const status = readField(source, ["status"]);
@@ -690,6 +757,21 @@ export async function createAssignment(
   });
 }
 
+export async function createAssignmentsBulk(
+  payload: {
+    employeeId: string;
+    assetIds: string[];
+    notes?: string | null;
+  },
+  token?: string | null,
+) {
+  return request<BulkAssignmentResult>("/assignments/bulk", {
+    method: "POST",
+    body: payload,
+    token,
+  });
+}
+
 export async function returnAssignment(
   assignmentId: string,
   payload: ReturnAssignmentInput,
@@ -759,6 +841,19 @@ export async function deleteAssetAttachment(
       token,
     },
   );
+}
+
+export async function deleteAsset(
+  assetId: string,
+  options: { confirmed?: boolean } = {},
+  token?: string | null,
+) {
+  const suffix = options.confirmed ? "?confirmed=true" : "";
+
+  return request<{ ok: boolean }>(`/assets/${assetId}${suffix}`, {
+    method: "DELETE",
+    token,
+  });
 }
 
 export async function downloadAssetAttachment(

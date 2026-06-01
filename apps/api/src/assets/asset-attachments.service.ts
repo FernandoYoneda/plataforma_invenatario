@@ -86,6 +86,16 @@ export class AssetAttachmentsService {
     return { ok: true };
   }
 
+  async removeStoredFiles(attachments: Array<{ filePath: string }>) {
+    for (const attachment of attachments) {
+      try {
+        await unlink(this.resolveStoredPath(attachment.filePath));
+      } catch {
+        // O banco ja foi atualizado; arquivo ausente nao deve bloquear a operacao.
+      }
+    }
+  }
+
   async getDownload(assetId: string, attachmentId: string) {
     const attachment = await this.findAttachment(assetId, attachmentId);
     const absolutePath = this.resolveStoredPath(attachment.filePath);

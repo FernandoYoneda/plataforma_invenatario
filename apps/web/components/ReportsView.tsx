@@ -6,6 +6,7 @@ import { getActiveAssignments, getAssets, getEmployees } from "@/lib/api";
 import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import { useAuth } from "./AuthProvider";
 import { canExportReports } from "@/lib/permissions";
+import * as XLSX from "xlsx";
 import type {
   Asset,
   AssetStatus,
@@ -21,6 +22,7 @@ const TYPE_OPTIONS: { value: AssetType; label: string }[] = [
   { value: "MONITOR", label: "Monitor" },
   { value: "MOUSE", label: "Mouse" },
   { value: "TECLADO", label: "Teclado" },
+  { value: "SMARTPHONE", label: "Smartphone" },
   { value: "OUTRO", label: "Outro" },
 ];
 
@@ -32,6 +34,8 @@ const STATUS_OPTIONS: { value: AssetStatus; label: string; color: string }[] = [
 ];
 
 const BAR_COLORS = ["#2c6470", "#d77967", "#173a43", "#9f735f", "#748c94"];
+const XLSX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 type GroupItem = {
   label: string;
@@ -54,6 +58,36 @@ function locationName(asset: Asset) {
   return asset.location?.name ?? "Sem localização";
 }
 
+function formatMoney(valueCents: number) {
+  return (valueCents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+
+  return parsed.toLocaleDateString("pt-BR");
+}
+
+function parseDateFilter(value: string, endOfDay = false) {
+  if (!value) return null;
+
+  const parsed = new Date(`${value}T${endOfDay ? "23:59:59.999" : "00:00:00"}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function assetPurchaseDate(asset: Asset) {
+  if (!asset.purchaseDate) return null;
+
+  const parsed = new Date(asset.purchaseDate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function incrementGroup(map: Map<string, number>, key: string) {
   map.set(key, (map.get(key) ?? 0) + 1);
 }
@@ -64,16 +98,50 @@ function groupToItems(map: Map<string, number>) {
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, "pt-BR"));
 }
 
-function csvCell(value: string | number | null | undefined) {
-  const text = value == null || value === "" ? "-" : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
+function formatFileTimestamp(date = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+  ].join("-") +
+    "_" +
+    [pad(date.getHours()), pad(date.getMinutes()), pad(date.getSeconds())].join("-");
 }
 
-function downloadCsv(filename: string, rows: string[][]) {
-  const csv = rows.map((row) => row.map(csvCell).join(";")).join("\r\n");
-  const blob = new Blob([`\uFEFF${csv}`], {
-    type: "text/csv;charset=utf-8",
+function formatWorksheet(sheet: XLSX.WorkSheet, rows: string[][]) {
+  const columnCount = Math.max(...rows.map((row) => row.length), 1);
+
+  sheet["!cols"] = Array.from({ length: columnCount }, (_, columnIndex) => {
+    const width = rows.reduce((max, row) => {
+      const cellLength = String(row[columnIndex] ?? "").length;
+      return Math.max(max, cellLength);
+    }, 0);
+
+    return { wch: Math.min(Math.max(width + 2, 12), 42) };
   });
+
+  for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+    const cellAddress = XLSX.utils.encode_cell({ r: 0, c: columnIndex });
+    const cell = sheet[cellAddress];
+    if (cell) {
+      cell.s = { font: { bold: true } };
+    }
+  }
+}
+
+function downloadXlsx(filename: string, rows: string[][]) {
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  formatWorksheet(sheet, rows);
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, "Ativos");
+  const buffer = XLSX.write(workbook, {
+    bookType: "xlsx",
+    type: "array",
+    cellStyles: true,
+  });
+  const blob = new Blob([buffer], { type: XLSX_MIME_TYPE });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -188,6 +256,8 @@ export default function ReportsView() {
   const [typeFilter, setTypeFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const canExportData = canExportReports(user?.role);
 
   function handleAuthError(err: unknown) {
@@ -262,6 +332,9 @@ export default function ReportsView() {
 
   const filteredAssets = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
+    const startDate = parseDateFilter(dateFrom);
+    const endDate = parseDateFilter(dateTo, true);
+    const hasPeriodFilter = Boolean(startDate || endDate);
 
     return assets.filter((asset) => {
       const matchesSearch =
@@ -271,17 +344,29 @@ export default function ReportsView() {
           asset.brand,
           asset.model ?? "",
           asset.serialNumber ?? "",
+          asset.phoneNumber1 ?? "",
+          asset.phoneNumber2 ?? "",
+          asset.imei1 ?? "",
+          asset.imei2 ?? "",
+          asset.carrier ?? "",
         ].some((value) => value.toLowerCase().includes(normalizedSearch));
+      const purchaseDate = assetPurchaseDate(asset);
+      const matchesPeriod =
+        !hasPeriodFilter ||
+        (purchaseDate !== null &&
+          (!startDate || purchaseDate >= startDate) &&
+          (!endDate || purchaseDate <= endDate));
 
       return (
         matchesSearch &&
+        matchesPeriod &&
         (!statusFilter || asset.status === statusFilter) &&
         (!typeFilter || asset.type === typeFilter) &&
         (!categoryFilter || categoryName(asset) === categoryFilter) &&
         (!locationFilter || locationName(asset) === locationFilter)
       );
     });
-  }, [assets, categoryFilter, locationFilter, search, statusFilter, typeFilter]);
+  }, [assets, categoryFilter, dateFrom, dateTo, locationFilter, search, statusFilter, typeFilter]);
 
   const report = useMemo(() => {
     const assignedAssetIds = new Set(assignments.map((item) => item.assetId));
@@ -301,11 +386,23 @@ export default function ReportsView() {
     const available = filteredAssets.filter(
       (asset) => asset.status === "ESTOQUE" && !assignedAssetIds.has(asset.id),
     ).length;
+    const totalValueCents = filteredAssets.reduce(
+      (sum, asset) => sum + (asset.valueCents ?? 0),
+      0,
+    );
+    const assetsWithValue = filteredAssets.filter(
+      (asset) => asset.valueCents != null,
+    ).length;
+    const averageValueCents = assetsWithValue > 0
+      ? Math.round(totalValueCents / assetsWithValue)
+      : 0;
 
     return {
       total: filteredAssets.length,
       assigned,
       available,
+      totalValueCents,
+      averageValueCents,
       byStatus: STATUS_OPTIONS.map((status) => ({
         label: status.label,
         value: byStatus.get(status.label) ?? 0,
@@ -321,7 +418,9 @@ export default function ReportsView() {
       statusFilter ||
       typeFilter ||
       categoryFilter ||
-      locationFilter,
+      locationFilter ||
+      dateFrom ||
+      dateTo,
   );
 
   function clearFilters() {
@@ -330,18 +429,36 @@ export default function ReportsView() {
     setTypeFilter("");
     setCategoryFilter("");
     setLocationFilter("");
+    setDateFrom("");
+    setDateTo("");
   }
 
   function exportFilteredAssets() {
+    const periodLabel = [
+      dateFrom ? formatDate(`${dateFrom}T00:00:00`) : "sem início",
+      dateTo ? formatDate(`${dateTo}T00:00:00`) : "sem fim",
+    ].join(" a ");
     const rows = [
+      ["Relatório financeiro de ativos"],
+      ["Período", periodLabel],
+      ["Total de ativos", String(report.total)],
+      ["Valor total", formatMoney(report.totalValueCents)],
+      ["Valor médio", formatMoney(report.averageValueCents)],
+      [],
+      ["Quantidade por categoria"],
+      ["categoria", "quantidade"],
+      ...report.byCategory.map((item) => [item.label, String(item.value)]),
+      [],
       [
-        "codigo",
+        "código",
         "tipo",
         "marca",
         "modelo",
         "status",
         "categoria",
         "localização",
+        "data de compra",
+        "valor",
       ],
       ...filteredAssets.map((asset) => [
         asset.internalCode,
@@ -351,24 +468,29 @@ export default function ReportsView() {
         labelStatus(asset.status),
         categoryName(asset),
         locationName(asset),
+        formatDate(asset.purchaseDate),
+        asset.valueCents == null ? "" : formatMoney(asset.valueCents),
       ]),
     ];
 
-    downloadCsv("assets-filtrados.csv", rows);
+    downloadXlsx(
+      `relatorio-financeiro-ativos-${formatFileTimestamp()}.xlsx`,
+      rows,
+    );
   }
 
   const cards = [
     { label: "Total de ativos", value: report.total },
-    { label: "Ativos atribuidos", value: report.assigned },
-    { label: "Ativos disponiveis", value: report.available },
-      { label: "Funcionários", value: employees.length },
+    { label: "Valor total", value: formatMoney(report.totalValueCents) },
+    { label: "Valor médio", value: formatMoney(report.averageValueCents) },
+    { label: "Categorias", value: report.byCategory.length },
   ];
 
   return (
     <AppShell
       current="reports"
       title="Relatórios"
-      subtitle="Indicadores operacionais do inventário e exportação dos ativos filtrados."
+      subtitle="Indicadores financeiros por data de compra e exportação dos ativos filtrados."
       contentSize="wide"
       actions={
         canExportData ? (
@@ -378,7 +500,7 @@ export default function ReportsView() {
             disabled={loading || redirecting || Boolean(error) || filteredAssets.length === 0}
             className="btn-primary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-70"
           >
-            Exportar CSV
+            Exportar XLSX
           </button>
         ) : null
       }
@@ -410,7 +532,7 @@ export default function ReportsView() {
               </button>
             </div>
 
-            <div className="grid gap-4 px-6 py-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(14rem,1.35fr)_repeat(4,minmax(9rem,1fr))]">
+            <div className="grid gap-4 px-6 py-5 md:grid-cols-2 xl:grid-cols-4">
               <label className="block text-sm">
                 <span className="font-medium [color:var(--text-primary)]">
                   Buscar
@@ -499,6 +621,32 @@ export default function ReportsView() {
                   ))}
                 </select>
               </label>
+
+              <label className="block text-sm">
+                <span className="font-medium [color:var(--text-primary)]">
+                  Data inicial
+                </span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(event) => setDateFrom(event.target.value)}
+                  disabled={loading}
+                  className="brand-input mt-1.5 disabled:cursor-not-allowed disabled:opacity-70"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="font-medium [color:var(--text-primary)]">
+                  Data final
+                </span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(event) => setDateTo(event.target.value)}
+                  disabled={loading}
+                  className="brand-input mt-1.5 disabled:cursor-not-allowed disabled:opacity-70"
+                />
+              </label>
             </div>
           </section>
 
@@ -512,7 +660,7 @@ export default function ReportsView() {
                 <div className="text-sm [color:var(--text-secondary)]">
                   {card.label}
                 </div>
-                <div className="mt-3 text-4xl font-semibold tracking-[-0.05em] [color:var(--text-primary)]">
+                <div className="mt-3 break-words text-3xl font-semibold [color:var(--text-primary)]">
                   {loading ? "..." : card.value}
                 </div>
               </article>
@@ -582,7 +730,7 @@ export default function ReportsView() {
                   Exportação
                 </h2>
                 <p className="mt-1 text-sm [color:var(--text-secondary)]">
-                  O CSV usa a selecao filtrada atual.
+                  A planilha XLSX usa o período e os filtros atuais.
                 </p>
               </div>
               <div className="space-y-3 text-sm [color:var(--text-secondary)]">

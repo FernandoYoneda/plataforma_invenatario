@@ -24,12 +24,19 @@ export default function EmployeesView() {
   const [redirecting, setRedirecting] = useState(false);
 
   function appendImportedEmployees(importedEmployees: Employee[]) {
-    if (filter === "inactive") {
+    const visibleImportedEmployees = importedEmployees.filter((employee) => {
+      if (filter === "active") return employee.isActive;
+      if (filter === "inactive") return !employee.isActive;
+      return true;
+    });
+
+    if (visibleImportedEmployees.length === 0) {
+      setError(null);
       return;
     }
 
     setEmployees((current) =>
-      [...current, ...importedEmployees].sort((a, b) =>
+      [...current, ...visibleImportedEmployees].sort((a, b) =>
         a.name.localeCompare(b.name, "pt-BR"),
       ),
     );

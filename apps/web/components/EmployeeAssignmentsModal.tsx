@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
-  createAssignment,
+  createAssignmentsBulk,
   getActiveAssignments,
   getAssets,
   getEmployeeAssignments,
@@ -12,7 +12,12 @@ import {
 } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { canManageAssignments } from "@/lib/permissions";
-import type { Asset, Assignment, Employee } from "@/lib/types";
+import type {
+  Asset,
+  Assignment,
+  BulkAssignmentResult,
+  Employee,
+} from "@/lib/types";
 import { useAuth } from "./AuthProvider";
 
 type FilterState = {
@@ -27,6 +32,7 @@ const TYPE_LABELS: Record<string, string> = {
   MONITOR: "Monitor",
   MOUSE: "Mouse",
   TECLADO: "Teclado",
+  SMARTPHONE: "Smartphone",
   OUTRO: "Outro",
 };
 
@@ -71,8 +77,9 @@ export default function EmployeeAssignmentsModal({
   const [assets, setAssets] = useState<Asset[]>([]);
   const [activeAssignments, setActiveAssignments] = useState<Assignment[]>([]);
   const [assignPanelOpen, setAssignPanelOpen] = useState(false);
-  const [selectedAssetId, setSelectedAssetId] = useState("");
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [assignmentNotes, setAssignmentNotes] = useState("");
+  const [bulkResult, setBulkResult] = useState<BulkAssignmentResult | null>(null);
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     categoryId: "",
@@ -194,6 +201,11 @@ export default function EmployeeAssignmentsModal({
           asset.brand,
           asset.model ?? "",
           asset.serialNumber ?? "",
+          asset.phoneNumber1 ?? "",
+          asset.phoneNumber2 ?? "",
+          asset.imei1 ?? "",
+          asset.imei2 ?? "",
+          asset.carrier ?? "",
         ].some((value) => value.toLowerCase().includes(normalizedSearch));
       const matchesCategory =
         !filters.categoryId || (asset.category?.id ?? "") === filters.categoryId;
@@ -232,24 +244,30 @@ export default function EmployeeAssignmentsModal({
     ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [assets]);
 
-  const selectedAsset = useMemo(
-    () => availableAssets.find((asset) => asset.id === selectedAssetId) ?? null,
-    [availableAssets, selectedAssetId],
+  const selectedAssetIdSet = useMemo(
+    () => new Set(selectedAssetIds),
+    [selectedAssetIds],
+  );
+
+  const selectedAssets = useMemo(
+    () => availableAssets.filter((asset) => selectedAssetIdSet.has(asset.id)),
+    [availableAssets, selectedAssetIdSet],
   );
 
   useEffect(() => {
-    if (selectedAssetId && !selectedAsset) {
-      setSelectedAssetId("");
-      setAssignmentNotes("");
-    }
-  }, [selectedAsset, selectedAssetId]);
+    setSelectedAssetIds((current) => {
+      const availableIds = new Set(availableAssets.map((asset) => asset.id));
+      return current.filter((assetId) => availableIds.has(assetId));
+    });
+  }, [availableAssets]);
 
   function close() {
     if (!loading && !actionLoadingId) {
       setOpen(false);
       setAssignPanelOpen(false);
-      setSelectedAssetId("");
+      setSelectedAssetIds([]);
       setAssignmentNotes("");
+      setBulkResult(null);
       setFilters({
         search: "",
         categoryId: "",
@@ -259,8 +277,29 @@ export default function EmployeeAssignmentsModal({
   }
 
   function resetAssignForm() {
-    setSelectedAssetId("");
+    setSelectedAssetIds([]);
     setAssignmentNotes("");
+    setBulkResult(null);
+  }
+
+  function toggleAssetSelection(assetId: string) {
+    setBulkResult(null);
+    setSelectedAssetIds((current) =>
+      current.includes(assetId)
+        ? current.filter((item) => item !== assetId)
+        : [...current, assetId],
+    );
+  }
+
+  function toggleAllAvailableAssets() {
+    setBulkResult(null);
+    setSelectedAssetIds((current) => {
+      if (availableAssets.length > 0 && current.length === availableAssets.length) {
+        return [];
+      }
+
+      return availableAssets.map((asset) => asset.id);
+    });
   }
 
   async function reloadData() {
@@ -285,8 +324,8 @@ export default function EmployeeAssignmentsModal({
   async function handleAssign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selectedAssetId) {
-      toast.error("Selecione um ativo para atribuir.");
+    if (selectedAssetIds.length === 0) {
+      toast.error("Selecione ao menos um ativo para atribuir.");
       return;
     }
 
@@ -296,23 +335,35 @@ export default function EmployeeAssignmentsModal({
       return;
     }
 
-    setActionLoadingId(selectedAssetId);
+    setActionLoadingId("bulk");
     setError(null);
+    setBulkResult(null);
 
     try {
-      await createAssignment(
+      const result = await createAssignmentsBulk(
         {
-          assetId: selectedAssetId,
           employeeId: employee.id,
+          assetIds: selectedAssetIds,
           notes: assignmentNotes.trim() || null,
         },
         token,
       );
 
-      toast.success("Ativo atribuido com sucesso.");
-      resetAssignForm();
+      setBulkResult(result);
+      setSelectedAssetIds([]);
+      setAssignmentNotes("");
       await reloadData();
       onChanged?.();
+
+      if (result.assignedCount > 0) {
+        toast.success(`${result.assignedCount} ativo(s) atribuído(s).`);
+      }
+
+      if (result.ignoredCount > 0 || result.errorCount > 0) {
+        toast.warning(
+          `${result.ignoredCount} ignorado(s), ${result.errorCount} erro(s).`,
+        );
+      }
     } catch (err: unknown) {
       if (handleAuthError(err)) {
         return;
@@ -507,7 +558,7 @@ export default function EmployeeAssignmentsModal({
                     </div>
 
                     <form onSubmit={handleAssign}>
-                  <div className="mt-4 overflow-auto">
+                      <div className="mt-4 overflow-auto">
                         {availableAssets.length === 0 ? (
                           <div className="text-sm [color:var(--text-secondary)]">
                             Nenhum ativo disponivel para atribuicao.
@@ -516,7 +567,17 @@ export default function EmployeeAssignmentsModal({
                           <table className="data-table data-table-compact">
                             <thead>
                               <tr>
-                                <th></th>
+                                <th>
+                                  <button
+                                    type="button"
+                                    onClick={toggleAllAvailableAssets}
+                                    className="btn-secondary px-3 py-2 text-xs"
+                                  >
+                                    {selectedAssetIds.length === availableAssets.length
+                                      ? "Limpar"
+                                      : "Todos"}
+                                  </button>
+                                </th>
                                 <th>Codigo</th>
                                 <th>Tipo</th>
                                 <th>Marca</th>
@@ -531,7 +592,7 @@ export default function EmployeeAssignmentsModal({
                                 <tr
                                   key={asset.id}
                                   className={
-                                    selectedAssetId === asset.id
+                                    selectedAssetIdSet.has(asset.id)
                                       ? "employee-assignment-selected"
                                       : ""
                                   }
@@ -539,10 +600,10 @@ export default function EmployeeAssignmentsModal({
                                   <td>
                                     <button
                                       type="button"
-                                      onClick={() => setSelectedAssetId(asset.id)}
+                                      onClick={() => toggleAssetSelection(asset.id)}
                                       className="btn-secondary px-3 py-2 text-xs"
                                     >
-                                      {selectedAssetId === asset.id
+                                      {selectedAssetIdSet.has(asset.id)
                                         ? "Selecionado"
                                         : "Selecionar"}
                                     </button>
@@ -561,14 +622,22 @@ export default function EmployeeAssignmentsModal({
                         )}
                       </div>
 
-                      {selectedAsset ? (
+                      {selectedAssets.length > 0 ? (
                         <div className="employee-assignments-selected mt-4 surface-soft rounded-[24px] px-4 py-4">
                           <div className="font-semibold [color:var(--text-primary)]">
-                            {assetTitle(selectedAsset)}
+                            {selectedAssets.length} ativo(s) selecionado(s)
                           </div>
-                          <div className="mt-2 text-sm [color:var(--text-secondary)]">
-                            {selectedAsset.category?.name ?? "Sem categoria"} |{" "}
-                            {selectedAsset.location?.name ?? "Sem localizacao"}
+                          <div className="mt-2 flex flex-wrap gap-2 text-sm [color:var(--text-secondary)]">
+                            {selectedAssets.slice(0, 8).map((asset) => (
+                              <span key={asset.id} className="status-pill">
+                                {asset.internalCode}
+                              </span>
+                            ))}
+                            {selectedAssets.length > 8 ? (
+                              <span className="status-pill">
+                                +{selectedAssets.length - 8}
+                              </span>
+                            ) : null}
                           </div>
 
                           <label className="mt-4 block text-sm">
@@ -590,9 +659,9 @@ export default function EmployeeAssignmentsModal({
                           disabled={Boolean(actionLoadingId)}
                           className="btn-primary px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
                         >
-                              {actionLoadingId === selectedAsset.id
+                              {actionLoadingId === "bulk"
                                 ? "Atribuindo..."
-                                : "Confirmar atribuicao"}
+                                : "Confirmar atribuições"}
                             </button>
 
                             <button
@@ -603,6 +672,44 @@ export default function EmployeeAssignmentsModal({
                             Limpar selecao
                           </button>
                         </div>
+                        </div>
+                      ) : null}
+
+                      {bulkResult ? (
+                        <div className="mt-4 space-y-3">
+                          <div className="grid gap-2 sm:grid-cols-3">
+                            <div className="status-pill">
+                              Atribuídos: {bulkResult.assignedCount}
+                            </div>
+                            <div className="status-pill">
+                              Ignorados: {bulkResult.ignoredCount}
+                            </div>
+                            <div className="status-pill">
+                              Erros: {bulkResult.errorCount}
+                            </div>
+                          </div>
+
+                          {bulkResult.ignored.length > 0 ? (
+                            <div className="status-banner-warning rounded-[18px] px-4 py-3 text-sm">
+                              {bulkResult.ignored.slice(0, 6).map((item) => (
+                                <div key={`ignored-${item.assetId}-${item.message}`}>
+                                  {(item.internalCode ?? item.assetId) || "Ativo"}:{" "}
+                                  {item.message}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          {bulkResult.errors.length > 0 ? (
+                            <div className="status-banner-error rounded-[18px] px-4 py-3 text-sm">
+                              {bulkResult.errors.slice(0, 6).map((item) => (
+                                <div key={`error-${item.assetId}-${item.message}`}>
+                                  {(item.internalCode ?? item.assetId) || "Ativo"}:{" "}
+                                  {item.message}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </form>

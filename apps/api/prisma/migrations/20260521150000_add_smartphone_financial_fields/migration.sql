@@ -1,0 +1,9 @@
+ALTER TYPE "AssetType" ADD VALUE 'SMARTPHONE';
+
+ALTER TABLE "Asset"
+  ADD COLUMN "purchaseDate" TIMESTAMP(3),
+  ADD COLUMN "phoneNumber1" TEXT,
+  ADD COLUMN "phoneNumber2" TEXT,
+  ADD COLUMN "imei1" TEXT,
+  ADD COLUMN "imei2" TEXT,
+  ADD COLUMN "carrier" TEXT;

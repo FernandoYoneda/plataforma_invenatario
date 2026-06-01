@@ -154,7 +154,20 @@ export class AssetsController {
   }
   @Delete(':id')
   @Roles(Role.ADMIN, Role.TI)
-  remove(@Param('id') id: string) {
-    return this.assetsService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+    @Query('confirmed') confirmed?: string,
+    @Query('force') force?: string,
+  ) {
+    const confirmedDelete =
+      confirmed === 'true' ||
+      confirmed === '1' ||
+      force === 'true' ||
+      force === '1';
+
+    return this.assetsService.remove(id, req.user?.id, {
+      confirmed: confirmedDelete,
+    });
   }
 }

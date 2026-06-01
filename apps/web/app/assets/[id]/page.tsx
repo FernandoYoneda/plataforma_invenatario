@@ -20,6 +20,7 @@ const TYPE_LABELS: Record<Asset["type"], string> = {
   MONITOR: "Monitor",
   MOUSE: "Mouse",
   TECLADO: "Teclado",
+  SMARTPHONE: "Smartphone",
   OUTRO: "Outro",
 };
 
@@ -264,11 +265,24 @@ export default function AssetDetailsPage() {
               <DetailItem label="Serial" value={fieldValue(asset.serialNumber)} />
               <DetailItem label="Categoria" value={fieldValue(asset.category?.name)} />
               <DetailItem
-                label="LocalizaÃ§Ã£o"
+                label="Localização"
                 value={fieldValue(asset.location?.name)}
               />
               <DetailItem label="Status" value={STATUS_LABELS[asset.status]} />
               <DetailItem label="Valor" value={formatMoney(asset.valueCents)} />
+              <DetailItem
+                label="Data de compra"
+                value={formatDate(asset.purchaseDate)}
+              />
+              {asset.type === "SMARTPHONE" ? (
+                <>
+                  <DetailItem label="Telefone 1" value={fieldValue(asset.phoneNumber1)} />
+                  <DetailItem label="Telefone 2" value={fieldValue(asset.phoneNumber2)} />
+                  <DetailItem label="IMEI 1" value={fieldValue(asset.imei1)} />
+                  <DetailItem label="IMEI 2" value={fieldValue(asset.imei2)} />
+                  <DetailItem label="Operadora" value={fieldValue(asset.carrier)} />
+                </>
+              ) : null}
               <DetailItem
                 label="Criado em"
                 value={formatDate(asset.createdAt ?? asset.registeredAt)}

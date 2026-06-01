@@ -4,6 +4,7 @@ export type AssetType =
   | "MONITOR"
   | "MOUSE"
   | "TECLADO"
+  | "SMARTPHONE"
   | "OUTRO";
 
 export type AssetStatus =
@@ -19,6 +20,8 @@ export type AssetTypeInput =
   | "Monitor"
   | "Mouse"
   | "Teclado"
+  | "Smartphone"
+  | "Celular"
   | "Outro"
   | "Computador"
   | "Computador (Desktop)";
@@ -62,6 +65,12 @@ export type Asset = {
   model?: string | null;
   serialNumber?: string | null;
   valueCents?: number | null;
+  purchaseDate?: string | null;
+  phoneNumber1?: string | null;
+  phoneNumber2?: string | null;
+  imei1?: string | null;
+  imei2?: string | null;
+  carrier?: string | null;
   status: AssetStatus;
   registeredAt: string;
   createdAt?: string;
@@ -96,6 +105,21 @@ export type Assignment = {
   employee?: Employee | null;
 };
 
+export type BulkAssignmentIssue = {
+  assetId: string;
+  internalCode?: string | null;
+  message: string;
+};
+
+export type BulkAssignmentResult = {
+  assignedCount: number;
+  ignoredCount: number;
+  errorCount: number;
+  assigned: Assignment[];
+  ignored: BulkAssignmentIssue[];
+  errors: BulkAssignmentIssue[];
+};
+
 export type CreateAssetInput = {
   type: AssetTypeInput;
   brand: string;
@@ -109,6 +133,12 @@ export type CreateAssetInput = {
   purchaseValueInCents?: AssetMoneyInput;
   value?: AssetMoneyInput;
   purchaseValue?: AssetMoneyInput;
+  purchaseDate?: string | null;
+  phoneNumber1?: string | null;
+  phoneNumber2?: string | null;
+  imei1?: string | null;
+  imei2?: string | null;
+  carrier?: string | null;
   status?: AssetStatus;
   notes?: string | null;
   categoryId?: string | null;
@@ -129,6 +159,12 @@ export type UpdateAssetInput = {
   purchaseValueInCents?: AssetMoneyInput;
   value?: AssetMoneyInput;
   purchaseValue?: AssetMoneyInput;
+  purchaseDate?: string | null;
+  phoneNumber1?: string | null;
+  phoneNumber2?: string | null;
+  imei1?: string | null;
+  imei2?: string | null;
+  carrier?: string | null;
   notes?: string | null;
   categoryId?: string | null;
   locationId?: string | null;

@@ -4,31 +4,49 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
-import { createEmployee, getLocations } from "@/lib/api";
+import {
+  createEmployee,
+  getEmployeesList,
+  getLocations,
+  inactivateEmployee,
+} from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { canManageEmployees } from "@/lib/permissions";
 import type { Employee, Location } from "@/lib/types";
 import { useAuth } from "./AuthProvider";
 
-type ImportedRow = {
+type EmployeeImportField =
+  | "name"
+  | "email"
+  | "department"
+  | "position"
+  | "status"
+  | "location";
+
+type EditableEmployeeRow = Record<EmployeeImportField, string> & {
+  rowId: string;
   rowNumber: number;
-  values: Record<string, string>;
 };
 
-type ValidatedRow = ImportedRow & {
-  name: string;
-  email: string;
-  department: string;
-  position: string;
-  location: string;
+type FieldError = {
+  field: EmployeeImportField;
+  message: string;
+};
+
+type ValidatedEmployeeRow = EditableEmployeeRow & {
   locationId: string;
-  errors: string[];
+  isActive: boolean;
+  errors: FieldError[];
   isValid: boolean;
+  isIgnored: boolean;
 };
 
 type PreviewState = {
   headers: string[];
-  rows: ImportedRow[];
+  rows: Array<{
+    rowNumber: number;
+    values: Record<string, string>;
+  }>;
 };
 
 type ImportResult = {
@@ -42,6 +60,18 @@ type ImportResult = {
   imported: Employee[];
 };
 
+const XLSX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+const FIELD_LABELS: Record<EmployeeImportField, string> = {
+  name: "Nome",
+  email: "Email",
+  department: "Departamento",
+  position: "Cargo",
+  status: "Status",
+  location: "Localização",
+};
+
 function normalizeText(value: unknown) {
   if (value === undefined || value === null) return "";
 
@@ -50,49 +80,6 @@ function normalizeText(value: unknown) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase();
-}
-
-function escapeCsvCell(value: string) {
-  const text = value ?? "";
-  if (/[",\n\r;]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
-}
-
-function downloadCsvTemplate() {
-  const headers = [
-    "nome",
-    "email",
-    "departamento",
-    "cargo",
-    "localizacao",
-  ];
-
-  const example = [
-    "Ana Souza",
-    "ana.souza@empresa.com",
-    "TI",
-    "Analista de Suporte",
-    "Matriz",
-  ];
-
-  const csv = [
-    headers.map(escapeCsvCell).join(","),
-    example.map(escapeCsvCell).join(","),
-  ].join("\r\n");
-
-  const blob = new Blob(["\ufeff", csv], {
-    type: "text/csv;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "modelo-funcionarios.csv";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
 function findHeader(headers: string[], aliases: string[]) {
@@ -108,12 +95,90 @@ function findHeader(headers: string[], aliases: string[]) {
   );
 }
 
-async function readCsv(file: File): Promise<PreviewState> {
-  const workbook = XLSX.read(await file.text(), { type: "string" });
-  const sheetName = workbook.SheetNames[0];
+function valueByHeader(
+  row: PreviewState["rows"][number],
+  header: string,
+) {
+  if (!header) return "";
+  return row.values[header] ?? "";
+}
 
+function formatWorksheet(sheet: XLSX.WorkSheet, rows: string[][]) {
+  sheet["!cols"] = rows[0].map((_, columnIndex) => {
+    const width = rows.reduce((max, row) => {
+      const cellLength = String(row[columnIndex] ?? "").length;
+      return Math.max(max, cellLength);
+    }, 0);
+
+    return { wch: Math.min(Math.max(width + 2, 12), 34) };
+  });
+
+  for (let columnIndex = 0; columnIndex < rows[0].length; columnIndex += 1) {
+    const cellAddress = XLSX.utils.encode_cell({ r: 0, c: columnIndex });
+    const cell = sheet[cellAddress];
+    if (cell) {
+      cell.s = { font: { bold: true } };
+    }
+  }
+}
+
+function downloadXlsxTemplate() {
+  const rows = [
+    ["nome", "email", "departamento", "cargo", "status", "localização"],
+    [
+      "Ana Souza",
+      "ana.souza@empresa.com",
+      "TI",
+      "Analista de Suporte",
+      "Ativo",
+      "Matriz",
+    ],
+  ];
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  formatWorksheet(sheet, rows);
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, "Funcionarios");
+
+  const buffer = XLSX.write(workbook, {
+    bookType: "xlsx",
+    type: "array",
+    cellStyles: true,
+  });
+  const blob = new Blob([buffer], { type: XLSX_MIME_TYPE });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "modelo-importacao-funcionarios.xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+async function readSpreadsheet(file: File): Promise<PreviewState> {
+  const lowerName = file.name.toLowerCase();
+  const isCsv = lowerName.endsWith(".csv");
+  const isXlsx = lowerName.endsWith(".xlsx");
+
+  if (!isCsv && !isXlsx) {
+    throw new Error("Formato inválido. Envie uma planilha .xlsx ou .csv.");
+  }
+
+  let workbook: XLSX.WorkBook;
+
+  try {
+    workbook = isCsv
+      ? XLSX.read(await file.text(), { type: "string" })
+      : XLSX.read(await file.arrayBuffer(), { type: "array" });
+  } catch {
+    throw new Error("Não foi possível ler a planilha.");
+  }
+
+  const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
-    throw new Error("Arquivo sem planilha válida.");
+    throw new Error("Planilha vazia ou sem aba válida.");
   }
 
   const sheet = workbook.Sheets[sheetName];
@@ -141,76 +206,154 @@ async function readCsv(file: File): Promise<PreviewState> {
   });
 
   if (headers.length === 0 || rows.length === 0) {
-    throw new Error("Arquivo precisa conter cabeçalho e ao menos uma linha.");
+    throw new Error("A planilha precisa conter cabeçalho e ao menos uma linha.");
   }
 
   return { headers, rows };
 }
 
-function valueByHeader(row: ImportedRow, header: string) {
-  if (!header) return "";
-  return row.values[header] ?? "";
+function previewToEditableRows(preview: PreviewState): EditableEmployeeRow[] {
+  const nameHeader = findHeader(preview.headers, [
+    "nome",
+    "funcionario",
+    "funcionário",
+  ]);
+  const emailHeader = findHeader(preview.headers, ["email", "e-mail"]);
+  const departmentHeader = findHeader(preview.headers, ["departamento", "setor"]);
+  const positionHeader = findHeader(preview.headers, [
+    "cargo",
+    "posicao",
+    "posição",
+    "funcao",
+    "função",
+  ]);
+  const statusHeader = findHeader(preview.headers, ["status", "situacao", "situação"]);
+  const locationHeader = findHeader(preview.headers, [
+    "localizacao",
+    "localização",
+    "local",
+    "unidade",
+  ]);
+
+  return preview.rows.map((row) => ({
+    rowId: `row-${row.rowNumber}`,
+    rowNumber: row.rowNumber,
+    name: valueByHeader(row, nameHeader),
+    email: valueByHeader(row, emailHeader),
+    department: valueByHeader(row, departmentHeader),
+    position: valueByHeader(row, positionHeader),
+    status: valueByHeader(row, statusHeader) || "Ativo",
+    location: valueByHeader(row, locationHeader),
+  }));
 }
 
-function validateRows(preview: PreviewState, existingEmployees: Employee[]) {
-  const headers = preview.headers;
-  const nameHeader = findHeader(headers, ["nome", "funcionario", "funcionário"]);
-  const emailHeader = findHeader(headers, ["email", "e-mail"]);
-  const departmentHeader = findHeader(headers, ["departamento", "setor"]);
-  const positionHeader = findHeader(headers, ["cargo", "posicao", "posição", "funcao", "função"]);
-  const locationHeader = findHeader(headers, ["localizacao", "localização", "local", "unidade"]);
+function isBlankRow(row: EditableEmployeeRow) {
+  return (Object.keys(FIELD_LABELS) as EmployeeImportField[]).every(
+    (field) => !row[field].trim(),
+  );
+}
 
+function parseStatus(value: string) {
+  const normalized = normalizeText(value);
+
+  if (!normalized || ["ativo", "active", "sim", "true", "1"].includes(normalized)) {
+    return true;
+  }
+
+  if (["inativo", "inactive", "nao", "não", "false", "0"].includes(normalized)) {
+    return false;
+  }
+
+  return null;
+}
+
+function validateRows(
+  rows: EditableEmployeeRow[],
+  existingEmployees: Employee[],
+  locations: Location[],
+) {
   const existingEmails = new Set(
     existingEmployees.map((employee) => normalizeText(employee.email)),
   );
   const seenEmails = new Set<string>();
 
-  return preview.rows.map((row) => {
-    const errors: string[] = [];
-    const name = valueByHeader(row, nameHeader);
-    const email = valueByHeader(row, emailHeader);
-    const department = valueByHeader(row, departmentHeader);
-    const position = valueByHeader(row, positionHeader);
-    const location = valueByHeader(row, locationHeader);
-    const normalizedEmail = normalizeText(email);
+  return rows.map((row) => {
+    const errors: FieldError[] = [];
+    const normalizedEmail = normalizeText(row.email);
+    const status = parseStatus(row.status);
+    const locationId =
+      locations.find(
+        (location) => normalizeText(location.name) === normalizeText(row.location),
+      )?.id ?? "";
+    const ignored = isBlankRow(row);
 
-    if (!name.trim()) {
-      errors.push("Nome é obrigatório.");
+    if (ignored) {
+      return {
+        ...row,
+        locationId: "",
+        isActive: true,
+        errors,
+        isValid: false,
+        isIgnored: true,
+      };
     }
 
-    if (!email.trim()) {
-      errors.push("Email é obrigatório.");
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      errors.push("Email inválido.");
+    if (!row.name.trim()) {
+      errors.push({ field: "name", message: "Nome é obrigatório." });
+    }
+
+    if (!row.email.trim()) {
+      errors.push({ field: "email", message: "Email é obrigatório." });
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email.trim())) {
+      errors.push({ field: "email", message: "Email inválido." });
     }
 
     if (normalizedEmail && existingEmails.has(normalizedEmail)) {
-      errors.push("Já existe funcionário cadastrado com esse email.");
+      errors.push({
+        field: "email",
+        message: "Já existe funcionário cadastrado com esse email.",
+      });
     }
 
     if (normalizedEmail) {
       if (seenEmails.has(normalizedEmail)) {
-        errors.push("Email duplicado na planilha.");
+        errors.push({ field: "email", message: "Email duplicado na planilha." });
       }
       seenEmails.add(normalizedEmail);
     }
 
-    if (!location.trim()) {
-      errors.push("Localização é obrigatória.");
+    if (status === null) {
+      errors.push({ field: "status", message: "Status deve ser Ativo ou Inativo." });
+    }
+
+    if (!row.location.trim()) {
+      errors.push({ field: "location", message: "Localização é obrigatória." });
+    } else if (!locationId) {
+      errors.push({
+        field: "location",
+        message: "Localização não encontrada na base.",
+      });
     }
 
     return {
       ...row,
-      name,
-      email,
-      department,
-      position,
-      location,
-      locationId: "",
+      locationId,
+      isActive: status ?? true,
       errors,
       isValid: errors.length === 0,
+      isIgnored: false,
     };
   });
+}
+
+function fieldHasError(row: ValidatedEmployeeRow, field: EmployeeImportField) {
+  return row.errors.some((error) => error.field === field);
+}
+
+function fieldInputClass(row: ValidatedEmployeeRow, field: EmployeeImportField) {
+  return `brand-input min-w-40 text-sm ${
+    fieldHasError(row, field) ? "border-rose-400 bg-rose-50/70" : ""
+  }`;
 }
 
 export default function ImportEmployeesModal({
@@ -224,14 +367,15 @@ export default function ImportEmployeesModal({
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [editableRows, setEditableRows] = useState<EditableEmployeeRow[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
-  const [loadingLocations, setLoadingLocations] = useState(false);
+  const [loadingReferences, setLoadingReferences] = useState(false);
   const [referencesError, setReferencesError] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [knownEmployees, setKnownEmployees] = useState<Employee[]>(employees);
 
   useEffect(() => setMounted(true), []);
 
@@ -247,76 +391,70 @@ export default function ImportEmployeesModal({
   }, [open]);
 
   useEffect(() => {
+    setKnownEmployees(employees);
+  }, [employees]);
+
+  useEffect(() => {
     if (!open) return;
 
     let active = true;
 
-    async function loadLocations() {
+    async function loadReferences() {
       const token = getAuthToken();
 
       if (!token) {
         if (!active) return;
-        setReferencesError("Sessao expirada. Faca login novamente.");
+        setReferencesError("Sessão expirada. Faça login novamente.");
         setLocations([]);
         return;
       }
 
-      setLoadingLocations(true);
+      setLoadingReferences(true);
       setReferencesError(null);
 
       try {
-        const locationsData = await getLocations(token);
+        const [locationsData, employeesData] = await Promise.all([
+          getLocations(token),
+          getEmployeesList(token, "all"),
+        ]);
         if (!active) return;
         setLocations(locationsData);
+        setKnownEmployees(employeesData);
       } catch (err: unknown) {
         if (!active) return;
         const message =
           err instanceof Error
             ? err.message
-            : "Nao foi possivel carregar as localizacoes.";
+            : "Não foi possível carregar localizações e funcionários.";
         setReferencesError(message);
-        setLocations([]);
       } finally {
-        if (active) setLoadingLocations(false);
+        if (active) setLoadingReferences(false);
       }
     }
 
-    loadLocations();
+    loadReferences();
 
     return () => {
       active = false;
     };
   }, [open]);
 
-  const validatedRows = useMemo(() => {
-    if (!preview) return [];
-    const nextRows = validateRows(preview, employees);
+  const validatedRows = useMemo(
+    () => validateRows(editableRows, knownEmployees, locations),
+    [editableRows, knownEmployees, locations],
+  );
 
-    return nextRows.map((row) => {
-      const locationId =
-        locations.find(
-          (location) =>
-            normalizeText(location.name) === normalizeText(row.location),
-        )?.id ?? "";
-
-      const errors = [...row.errors];
-
-      if (!locationId) {
-        errors.push("Localização não encontrada na base.");
-      }
-
-      return {
-        ...row,
-        locationId,
-        errors,
-        isValid: errors.length === 0,
-      };
-    });
-  }, [employees, locations, preview]);
-
-  const validCount = validatedRows.filter((row) => row.isValid).length;
-  const invalidCount = validatedRows.length - validCount;
-  const canImport = Boolean(file) && validCount > 0 && !uploading;
+  const ignoredCount = validatedRows.filter((row) => row.isIgnored).length;
+  const rowsWithData = validatedRows.filter((row) => !row.isIgnored);
+  const validRows = rowsWithData.filter((row) => row.isValid);
+  const validCount = validRows.length;
+  const invalidCount = rowsWithData.length - validCount;
+  const canImport =
+    Boolean(file) &&
+    validCount > 0 &&
+    invalidCount === 0 &&
+    !uploading &&
+    !loadingReferences;
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const nextFile = event.target.files?.[0] ?? null;
@@ -324,7 +462,7 @@ export default function ImportEmployeesModal({
     setImportResult(null);
 
     if (!nextFile) {
-      setPreview(null);
+      setEditableRows([]);
       setPreviewError(null);
       return;
     }
@@ -333,12 +471,12 @@ export default function ImportEmployeesModal({
     setPreviewError(null);
 
     try {
-      const nextPreview = await readCsv(nextFile);
-      setPreview(nextPreview);
+      const preview = await readSpreadsheet(nextFile);
+      setEditableRows(previewToEditableRows(preview));
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Não foi possível ler o arquivo.";
-      setPreview(null);
+      setEditableRows([]);
       setPreviewError(message);
       toast.error(message);
     } finally {
@@ -346,9 +484,22 @@ export default function ImportEmployeesModal({
     }
   }
 
+  function updateRow(
+    rowId: string,
+    field: EmployeeImportField,
+    value: string,
+  ) {
+    setImportResult(null);
+    setEditableRows((current) =>
+      current.map((row) =>
+        row.rowId === rowId ? { ...row, [field]: value } : row,
+      ),
+    );
+  }
+
   function resetForm() {
     setFile(null);
-    setPreview(null);
+    setEditableRows([]);
     setPreviewError(null);
     setImportResult(null);
   }
@@ -364,16 +515,21 @@ export default function ImportEmployeesModal({
     event.preventDefault();
     setImportResult(null);
 
-    if (!file || !preview) {
-      const message = "Selecione um arquivo CSV antes de importar.";
+    if (!file || editableRows.length === 0) {
+      const message = "Selecione uma planilha antes de importar.";
       setPreviewError(message);
       toast.error(message);
       return;
     }
 
-    const rowsToImport = validatedRows.filter((row) => row.isValid);
+    if (invalidCount > 0) {
+      const message = "Corrija os erros da pré-visualização antes de importar.";
+      setPreviewError(message);
+      toast.error(message);
+      return;
+    }
 
-    if (rowsToImport.length === 0) {
+    if (validRows.length === 0) {
       const message = "Nenhuma linha válida encontrada para importação.";
       setPreviewError(message);
       toast.error(message);
@@ -389,14 +545,15 @@ export default function ImportEmployeesModal({
     }
 
     setUploading(true);
+    setPreviewError(null);
 
     const imported: Employee[] = [];
     const errors: ImportResult["errors"] = [];
 
     try {
-      for (const row of rowsToImport) {
+      for (const row of validRows) {
         try {
-          const employee = await createEmployee(
+          const created = await createEmployee(
             {
               name: row.name.trim(),
               email: row.email.trim(),
@@ -406,6 +563,11 @@ export default function ImportEmployeesModal({
             },
             token,
           );
+
+          const employee = row.isActive
+            ? created
+            : await inactivateEmployee(created.id, token);
+
           imported.push(employee);
         } catch (err: unknown) {
           const message =
@@ -417,11 +579,10 @@ export default function ImportEmployeesModal({
         }
       }
 
-      const ignoredCount = validatedRows.length - imported.length;
       const result: ImportResult = {
-        totalRows: validatedRows.length,
+        totalRows: editableRows.length,
         importedCount: imported.length,
-        ignoredCount,
+        ignoredCount: ignoredCount + errors.length,
         errors,
         imported,
       };
@@ -429,9 +590,7 @@ export default function ImportEmployeesModal({
       setImportResult(result);
       if (imported.length > 0) {
         onImported(imported);
-      }
-
-      if (imported.length > 0) {
+        setKnownEmployees((current) => [...current, ...imported]);
         toast.success(
           `Importação concluída: ${result.importedCount} importado(s), ${result.ignoredCount} ignorado(s).`,
         );
@@ -458,7 +617,7 @@ export default function ImportEmployeesModal({
 
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div
-          className="glass-panel w-full max-w-6xl overflow-hidden rounded-[30px]"
+          className="glass-panel w-full max-w-7xl overflow-hidden rounded-[30px]"
           onClick={(event) => event.stopPropagation()}
         >
           <div className="flex items-center justify-between border-b px-6 py-5 [border-color:var(--border-soft)]">
@@ -481,7 +640,7 @@ export default function ImportEmployeesModal({
 
           <form onSubmit={handleImport}>
             <div className="max-h-[78vh] overflow-auto px-6 py-5">
-              <div className="grid gap-4 lg:grid-cols-[minmax(18rem,26rem)_1fr]">
+              <div className="grid gap-4 lg:grid-cols-[minmax(18rem,25rem)_1fr]">
                 <div className="space-y-4">
                   <section className="surface-soft rounded-[24px] px-4 py-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
@@ -490,26 +649,26 @@ export default function ImportEmployeesModal({
                           Modelo de importação
                         </div>
                         <div className="mt-1 text-xs [color:var(--text-secondary)]">
-                          Baixe um CSV com as colunas corretas.
+                          XLSX é o formato recomendado.
                         </div>
                       </div>
 
                       <button
                         type="button"
-                        onClick={downloadCsvTemplate}
+                        onClick={downloadXlsxTemplate}
                         className="btn-secondary px-4 py-2.5 text-sm"
                       >
-                        Baixar modelo CSV
+                        Baixar modelo XLSX
                       </button>
                     </div>
 
                     <label className="block text-sm">
                       <span className="font-medium [color:var(--text-primary)]">
-                        Arquivo CSV
+                        Arquivo XLSX ou CSV
                       </span>
                       <input
                         type="file"
-                        accept=".csv,text/csv"
+                        accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
                         onChange={handleFileChange}
                         className="brand-input mt-1.5"
                         disabled={uploading}
@@ -517,16 +676,16 @@ export default function ImportEmployeesModal({
                     </label>
 
                     <p className="mt-2 text-xs [color:var(--text-secondary)]">
-                      O arquivo precisa ter uma linha de cabeçalho.
+                      Os dados serão exibidos para revisão antes da importação.
                     </p>
                     <p className="mt-2 text-xs [color:var(--text-secondary)]">
-                      Localização é obrigatória e deve existir no cadastro de locais.
+                      Localização é obrigatória e deve existir no cadastro.
                     </p>
                     <p className="mt-2 text-xs [color:var(--text-secondary)]">
                       {file ? `Arquivo selecionado: ${file.name}` : "Nenhum arquivo selecionado."}
                     </p>
-                    {loadingLocations ? (
-                      <div className="status-pill mt-3">Carregando localizações...</div>
+                    {loadingReferences ? (
+                      <div className="status-pill mt-3">Carregando referências...</div>
                     ) : null}
                     {referencesError ? (
                       <div className="status-banner-warning mt-3 rounded-[18px] px-3 py-2 text-xs">
@@ -535,30 +694,38 @@ export default function ImportEmployeesModal({
                     ) : null}
                   </section>
 
+                  <section className="surface-soft rounded-[24px] px-4 py-4">
+                    <div className="text-sm font-semibold [color:var(--text-primary)]">
+                      Resumo
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs">
+                      {[
+                        ["Linhas", editableRows.length],
+                        ["Válidas", validCount],
+                        ["Com erro", invalidCount],
+                        ["Ignoradas", ignoredCount],
+                      ].map(([label, value]) => (
+                        <div
+                          key={label}
+                          className="rounded-[18px] border px-3 py-3 [border-color:var(--border-soft)]"
+                        >
+                          <div className="text-[var(--text-secondary)]">{label}</div>
+                          <div className="mt-1 text-lg font-semibold [color:var(--text-primary)]">
+                            {value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
                   {importResult ? (
                     <section className="surface-soft rounded-[24px] px-4 py-4">
                       <div className="text-sm font-semibold [color:var(--text-primary)]">
-                        Resumo da importação
+                        Resultado
                       </div>
-                      <div className="mt-3 grid grid-cols-3 gap-3 text-center text-xs">
-                        <div className="rounded-[18px] border px-3 py-3 [border-color:var(--border-soft)]">
-                          <div className="text-[var(--text-secondary)]">Importados</div>
-                          <div className="mt-1 text-lg font-semibold [color:var(--text-primary)]">
-                            {importResult.importedCount}
-                          </div>
-                        </div>
-                        <div className="rounded-[18px] border px-3 py-3 [border-color:var(--border-soft)]">
-                          <div className="text-[var(--text-secondary)]">Ignorados</div>
-                          <div className="mt-1 text-lg font-semibold [color:var(--text-primary)]">
-                            {importResult.ignoredCount}
-                          </div>
-                        </div>
-                        <div className="rounded-[18px] border px-3 py-3 [border-color:var(--border-soft)]">
-                          <div className="text-[var(--text-secondary)]">Erros</div>
-                          <div className="mt-1 text-lg font-semibold [color:var(--text-primary)]">
-                            {importResult.errors.length}
-                          </div>
-                        </div>
+                      <div className="mt-3 text-sm [color:var(--text-secondary)]">
+                        {importResult.importedCount} importado(s),{" "}
+                        {importResult.ignoredCount} ignorado(s).
                       </div>
 
                       {importResult.errors.length > 0 ? (
@@ -581,10 +748,10 @@ export default function ImportEmployeesModal({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-semibold [color:var(--text-primary)]">
-                        Pré-visualização
+                        Pré-visualização editável
                       </div>
                       <div className="mt-1 text-xs [color:var(--text-secondary)]">
-                        Valide os dados antes de importar.
+                        Corrija os campos diretamente na tabela.
                       </div>
                     </div>
                     {loadingPreview ? <span className="status-pill">Lendo...</span> : null}
@@ -596,7 +763,7 @@ export default function ImportEmployeesModal({
                     </div>
                   ) : null}
 
-                  {preview ? (
+                  {editableRows.length > 0 ? (
                     <div className="mt-4 overflow-auto rounded-[20px] border [border-color:var(--border-soft)]">
                       <table className="data-table data-table-compact">
                         <thead>
@@ -606,30 +773,92 @@ export default function ImportEmployeesModal({
                             <th>Email</th>
                             <th>Departamento</th>
                             <th>Cargo</th>
+                            <th>Status</th>
                             <th>Localização</th>
                             <th>Validação</th>
                           </tr>
                         </thead>
                         <tbody>
                           {validatedRows.map((row) => (
-                            <tr key={row.rowNumber}>
+                            <tr key={row.rowId}>
                               <td>{row.rowNumber}</td>
-                              <td className="cell-strong">{row.name || "-"}</td>
-                              <td>{row.email || "-"}</td>
-                              <td>{row.department || "-"}</td>
-                              <td>{row.position || "-"}</td>
-                              <td>{row.location || "-"}</td>
                               <td>
-                                {row.isValid ? (
+                                <input
+                                  value={row.name}
+                                  onChange={(event) =>
+                                    updateRow(row.rowId, "name", event.target.value)
+                                  }
+                                  className={fieldInputClass(row, "name")}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  value={row.email}
+                                  onChange={(event) =>
+                                    updateRow(row.rowId, "email", event.target.value)
+                                  }
+                                  className={fieldInputClass(row, "email")}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  value={row.department}
+                                  onChange={(event) =>
+                                    updateRow(row.rowId, "department", event.target.value)
+                                  }
+                                  className={fieldInputClass(row, "department")}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  value={row.position}
+                                  onChange={(event) =>
+                                    updateRow(row.rowId, "position", event.target.value)
+                                  }
+                                  className={fieldInputClass(row, "position")}
+                                />
+                              </td>
+                              <td>
+                                <select
+                                  value={row.status}
+                                  onChange={(event) =>
+                                    updateRow(row.rowId, "status", event.target.value)
+                                  }
+                                  className={fieldInputClass(row, "status")}
+                                >
+                                  <option value="Ativo">Ativo</option>
+                                  <option value="Inativo">Inativo</option>
+                                </select>
+                              </td>
+                              <td>
+                                <select
+                                  value={row.location}
+                                  onChange={(event) =>
+                                    updateRow(row.rowId, "location", event.target.value)
+                                  }
+                                  className={fieldInputClass(row, "location")}
+                                >
+                                  <option value="">Selecione</option>
+                                  {locations.map((location) => (
+                                    <option key={location.id} value={location.name}>
+                                      {location.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td>
+                                {row.isIgnored ? (
+                                  <span className="status-pill">Ignorada</span>
+                                ) : row.isValid ? (
                                   <span className="status-pill">OK</span>
                                 ) : (
                                   <div className="space-y-1 text-xs text-rose-700">
                                     {row.errors.map((error) => (
                                       <div
-                                        key={`${row.rowNumber}-${error}`}
+                                        key={`${row.rowId}-${error.field}-${error.message}`}
                                         className="rounded-full bg-rose-100 px-2.5 py-1"
                                       >
-                                        {error}
+                                        {FIELD_LABELS[error.field]}: {error.message}
                                       </div>
                                     ))}
                                   </div>
@@ -642,29 +871,17 @@ export default function ImportEmployeesModal({
                     </div>
                   ) : (
                     <div className="mt-4 rounded-[20px] border border-dashed px-4 py-10 text-center text-sm [border-color:var(--border-soft)] [color:var(--text-secondary)]">
-                      Selecione um arquivo CSV para visualizar os dados.
+                      Selecione uma planilha para visualizar os dados.
                     </div>
                   )}
 
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      <span className="status-pill">
-                        {validatedRows.length} linha(s)
-                      </span>
-                      <span className="status-pill">
-                        {validCount} válida(s)
-                      </span>
-                      <span className="status-pill">
-                        {invalidCount} com erro
-                      </span>
-                    </div>
-
+                  <div className="mt-4 flex justify-end">
                     <button
                       type="submit"
                       disabled={!canImport}
                       className="btn-primary px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
                     >
-                      {uploading ? "Importando..." : "Importar funcionários"}
+                      {uploading ? "Importando..." : "Confirmar importação"}
                     </button>
                   </div>
                 </section>

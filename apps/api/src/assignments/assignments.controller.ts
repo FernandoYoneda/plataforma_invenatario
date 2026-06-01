@@ -12,6 +12,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AssignmentsService } from './assignments.service';
+import { CreateBulkAssignmentDto } from './dto/create-bulk-assignment.dto';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { ReturnAssignmentDto } from './dto/return-assignment.dto';
 
@@ -35,6 +36,15 @@ export class AssignmentsController {
   @Roles(Role.ADMIN, Role.TI)
   create(@Body() dto: CreateAssignmentDto, @Req() req: AuthenticatedRequest) {
     return this.assignmentsService.create(dto, req.user?.id);
+  }
+
+  @Post('bulk')
+  @Roles(Role.ADMIN, Role.TI)
+  createBulk(
+    @Body() dto: CreateBulkAssignmentDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.assignmentsService.createBulk(dto, req.user?.id);
   }
 
   @Post(':id/return')

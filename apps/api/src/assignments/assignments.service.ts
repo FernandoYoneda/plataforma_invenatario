@@ -4,11 +4,34 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { AssetStatus } from '@prisma/client';
+import { AssetStatus, Prisma } from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateBulkAssignmentDto } from './dto/create-bulk-assignment.dto';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { ReturnAssignmentDto } from './dto/return-assignment.dto';
+
+type AssignmentWithRelations = Prisma.AssignmentGetPayload<{
+  include: {
+    asset: {
+      include: {
+        location: true;
+        category: true;
+      };
+    };
+    employee: {
+      include: {
+        location: true;
+      };
+    };
+  };
+}>;
+
+type BulkAssignmentIssue = {
+  assetId: string;
+  internalCode?: string | null;
+  message: string;
+};
 
 @Injectable()
 export class AssignmentsService {
@@ -124,11 +147,185 @@ export class AssignmentsService {
       action: 'ASSIGNMENT_CREATED',
       entityType: 'Assignment',
       entityId: assignment.id,
-      description: `${this.describeAsset(assignment.asset)} atribuÃ­do para ${assignment.employee?.name ?? assignment.employeeId ?? 'funcionÃ¡rio removido'} ${this.describeLocation(assignment.employee?.location)}`,
+      description: `${this.describeAsset(assignment.asset)} atribuido para ${assignment.employee?.name ?? assignment.employeeId ?? 'funcionario removido'} ${this.describeLocation(assignment.employee?.location)}`,
       userId,
     });
 
     return assignment;
+  }
+
+  async createBulk(dto: CreateBulkAssignmentDto, userId?: string | null) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: dto.employeeId },
+      include: {
+        location: true,
+      },
+    });
+
+    if (!employee) throw new NotFoundException('Funcionario nao encontrado');
+
+    if (!employee.locationId) {
+      throw new BadRequestException(
+        'Funcionario precisa de localizacao para receber ativos.',
+      );
+    }
+
+    const assigned: AssignmentWithRelations[] = [];
+    const ignored: BulkAssignmentIssue[] = [];
+    const errors: BulkAssignmentIssue[] = [];
+    const seenAssetIds = new Set<string>();
+    const uniqueAssetIds: string[] = [];
+
+    for (const rawAssetId of dto.assetIds) {
+      const assetId = this.trimToNull(rawAssetId);
+
+      if (!assetId) {
+        ignored.push({
+          assetId: '',
+          message: 'ID do ativo vazio ignorado',
+        });
+        continue;
+      }
+
+      if (seenAssetIds.has(assetId)) {
+        ignored.push({
+          assetId,
+          message: 'Ativo duplicado na selecao',
+        });
+        continue;
+      }
+
+      seenAssetIds.add(assetId);
+      uniqueAssetIds.push(assetId);
+    }
+
+    for (const assetId of uniqueAssetIds) {
+      const asset = await this.prisma.asset.findUnique({
+        where: { id: assetId },
+        include: {
+          location: true,
+          category: true,
+        },
+      });
+
+      if (!asset) {
+        ignored.push({
+          assetId,
+          message: 'Ativo nao encontrado',
+        });
+        continue;
+      }
+
+      if (asset.status !== AssetStatus.ESTOQUE) {
+        ignored.push({
+          assetId,
+          internalCode: asset.internalCode,
+          message: 'Ativo nao esta em estoque',
+        });
+        continue;
+      }
+
+      const activeAssignment = await this.prisma.assignment.findFirst({
+        where: {
+          assetId,
+          returnedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (activeAssignment) {
+        ignored.push({
+          assetId,
+          internalCode: asset.internalCode,
+          message: 'Ativo ja possui atribuicao ativa',
+        });
+        continue;
+      }
+
+      try {
+        const assignment = await this.prisma.$transaction(async (tx) => {
+          const createdAssignment = await tx.assignment.create({
+            data: {
+              assetId,
+              employeeId: employee.id,
+              notes: this.trimToNull(dto.notes),
+            },
+          });
+
+          await tx.asset.update({
+            where: { id: assetId },
+            data: {
+              status: AssetStatus.EM_USO,
+              locationId: employee.locationId,
+            },
+          });
+
+          const assignment = await tx.assignment.findUnique({
+            where: { id: createdAssignment.id },
+            include: {
+              asset: {
+                include: {
+                  location: true,
+                  category: true,
+                },
+              },
+              employee: {
+                include: {
+                  location: true,
+                },
+              },
+            },
+          });
+
+          if (!assignment) {
+            return null;
+          }
+
+          await tx.auditLog.create({
+            data: {
+              action: 'ASSIGNMENT_CREATED',
+              entityType: 'Assignment',
+              entityId: assignment.id,
+              description: `${this.describeAsset(assignment.asset)} atribuido para ${assignment.employee?.name ?? assignment.employeeId ?? 'funcionario removido'} ${this.describeLocation(assignment.employee?.location)}`,
+              userId: userId ?? null,
+            },
+          });
+
+          return assignment;
+        });
+
+        if (!assignment) {
+          errors.push({
+            assetId,
+            internalCode: asset.internalCode,
+            message: 'Atribuicao criada, mas nao encontrada para retorno',
+          });
+          continue;
+        }
+
+        assigned.push(assignment);
+      } catch (err: unknown) {
+        errors.push({
+          assetId,
+          internalCode: asset.internalCode,
+          message:
+            err instanceof Error
+              ? err.message
+              : 'Nao foi possivel atribuir este ativo',
+        });
+      }
+    }
+
+    return {
+      assignedCount: assigned.length,
+      ignoredCount: ignored.length,
+      errorCount: errors.length,
+      assigned,
+      ignored,
+      errors,
+    };
   }
 
   async returnAssignment(
@@ -206,7 +403,7 @@ export class AssignmentsService {
       action: 'ASSIGNMENT_RETURNED',
       entityType: 'Assignment',
       entityId: returnedAssignment.id,
-      description: `${this.describeAsset(returnedAssignment.asset)} devolvido por ${returnedAssignment.employee?.name ?? returnedAssignment.employeeId ?? 'funcionÃ¡rio removido'} ${this.describeLocation(returnedAssignment.asset?.location)}`,
+      description: `${this.describeAsset(returnedAssignment.asset)} devolvido por ${returnedAssignment.employee?.name ?? returnedAssignment.employeeId ?? 'funcionario removido'} ${this.describeLocation(returnedAssignment.asset?.location)}`,
       userId,
     });
 

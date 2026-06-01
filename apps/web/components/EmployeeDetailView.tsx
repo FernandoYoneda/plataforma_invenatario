@@ -36,6 +36,7 @@ function typeLabel(value?: string | null) {
     MONITOR: "Monitor",
     MOUSE: "Mouse",
     TECLADO: "Teclado",
+    SMARTPHONE: "Smartphone",
     OUTRO: "Outro",
   };
 

@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  deleteAsset,
   getActiveAssignments,
+  getAssetAttachments,
+  getAssetDetails,
   getAssets,
   getCategories,
   getLocations,
@@ -14,6 +17,7 @@ import { clearAuthToken, getAuthToken } from "@/lib/auth";
 import { useAuth } from "./AuthProvider";
 import { canExportReports, canManageAssets } from "@/lib/permissions";
 import * as XLSX from "xlsx";
+import { toast } from "sonner";
 import type {
   Asset,
   AssetStatus,
@@ -36,6 +40,7 @@ const TYPE_OPTIONS: { value: AssetType; label: string }[] = [
   { value: "MONITOR", label: "Monitor" },
   { value: "MOUSE", label: "Mouse" },
   { value: "TECLADO", label: "Teclado" },
+  { value: "SMARTPHONE", label: "Smartphone" },
   { value: "OUTRO", label: "Outro" },
 ];
 
@@ -47,6 +52,8 @@ const STATUS_OPTIONS: { value: AssetStatus; label: string }[] = [
 ];
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+const ACTIVE_ASSIGNMENT_DELETE_MESSAGE =
+  "Este ativo possui atribuição ativa.\nFaça a devolução antes de excluir\nou altere o status para Baixado.";
 
 type SortKey =
   | "internalCode"
@@ -59,7 +66,8 @@ type SortKey =
 
 type SortDirection = "asc" | "desc";
 
-type ExportFormat = "csv" | "xlsx";
+const XLSX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 function moneyBRL(valueCents?: number | null) {
   if (valueCents == null) return "-";
@@ -68,6 +76,15 @@ function moneyBRL(valueCents?: number | null) {
     style: "currency",
     currency: "BRL",
   });
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+
+  return parsed.toLocaleDateString("pt-BR");
 }
 
 function formatFileTimestamp(date = new Date()) {
@@ -144,11 +161,6 @@ function sortValue(asset: Asset, key: SortKey, categories: Category[], locations
   return values[key];
 }
 
-function csvCell(value: string | number | null | undefined) {
-  const text = value == null || value === "" ? "-" : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
-}
-
 function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -159,6 +171,25 @@ function downloadBlob(filename: string, blob: Blob) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function formatWorksheet(sheet: XLSX.WorkSheet, rows: string[][]) {
+  sheet["!cols"] = rows[0].map((_, columnIndex) => {
+    const width = rows.reduce((max, row) => {
+      const cellLength = String(row[columnIndex] ?? "").length;
+      return Math.max(max, cellLength);
+    }, 0);
+
+    return { wch: Math.min(Math.max(width + 2, 12), 42) };
+  });
+
+  for (let columnIndex = 0; columnIndex < rows[0].length; columnIndex += 1) {
+    const cellAddress = XLSX.utils.encode_cell({ r: 0, c: columnIndex });
+    const cell = sheet[cellAddress];
+    if (cell) {
+      cell.s = { font: { bold: true } };
+    }
+  }
 }
 
 function ActionMenuIcon() {
@@ -194,7 +225,6 @@ export default function AssetsList() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [exportOpen, setExportOpen] = useState(false);
   const [openActionsMenuAssetId, setOpenActionsMenuAssetId] = useState<
     string | null
   >(null);
@@ -209,6 +239,18 @@ export default function AssetsList() {
     null,
   );
   const [returningAssetId, setReturningAssetId] = useState<string | null>(null);
+  const [assetPendingDelete, setAssetPendingDelete] = useState<Asset | null>(
+    null,
+  );
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteImpactLoading, setDeleteImpactLoading] = useState(false);
+  const [deleteImpact, setDeleteImpact] = useState<{
+    historyCount: number;
+    attachmentCount: number;
+  } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteInfo, setDeleteInfo] = useState<string | null>(null);
+  const [returningDeleteAsset, setReturningDeleteAsset] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
   const locationIdFromQuery = searchParams.get("locationId") ?? "";
   const queryLocationName =
@@ -333,6 +375,11 @@ export default function AssetsList() {
           asset.brand,
           asset.model ?? "",
           asset.serialNumber ?? "",
+          asset.phoneNumber1 ?? "",
+          asset.phoneNumber2 ?? "",
+          asset.imei1 ?? "",
+          asset.imei2 ?? "",
+          asset.carrier ?? "",
         ].some((value) => value.toLowerCase().includes(normalizedSearch));
 
       const matchesStatus = !statusFilter || asset.status === statusFilter;
@@ -407,6 +454,71 @@ export default function AssetsList() {
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [openActionsMenuAssetId]);
+
+  useEffect(() => {
+    if (!assetPendingDelete) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (
+        event.key === "Escape" &&
+        !deleteLoading &&
+        !returningDeleteAsset
+      ) {
+        closeDeleteModal();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow || "";
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [assetPendingDelete, deleteLoading, returningDeleteAsset]);
+
+  useEffect(() => {
+    if (!assetPendingDelete) return;
+
+    let active = true;
+    const token = getAuthToken();
+
+    if (!token) {
+      setDeleteImpact(null);
+      setDeleteImpactLoading(false);
+      setDeleteError("Sessão expirada. Faça login novamente.");
+      return;
+    }
+
+    setDeleteImpactLoading(true);
+
+    Promise.all([
+      getAssetDetails(assetPendingDelete.id, token),
+      getAssetAttachments(assetPendingDelete.id, token),
+    ])
+      .then(([details, attachments]) => {
+        if (!active) return;
+        setDeleteImpact({
+          historyCount: details.history.length,
+          attachmentCount: attachments.length,
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+        setDeleteImpact(null);
+      })
+      .finally(() => {
+        if (active) {
+          setDeleteImpactLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [assetPendingDelete]);
 
   const hasFilters = Boolean(
     search.trim() ||
@@ -492,6 +604,131 @@ export default function AssetsList() {
     }
   }
 
+  function openDeleteModal(asset: Asset) {
+    setAssetPendingDelete(asset);
+    setDeleteImpact(null);
+    setDeleteError(null);
+    setDeleteInfo(null);
+  }
+
+  function closeDeleteModal() {
+    if (deleteLoading || returningDeleteAsset) return;
+
+    setAssetPendingDelete(null);
+    setDeleteImpact(null);
+    setDeleteError(null);
+    setDeleteInfo(null);
+    setDeleteImpactLoading(false);
+  }
+
+  function deleteErrorMessage(err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Nao foi possivel excluir o ativo.";
+    const normalized = message
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+
+    if (normalized.includes("atribuicao ativa")) {
+      return ACTIVE_ASSIGNMENT_DELETE_MESSAGE;
+    }
+
+    return message;
+  }
+
+  async function handleReturnFromDeleteModal() {
+    const asset = assetPendingDelete;
+    const assignment = asset ? activeAssignmentByAssetId.get(asset.id) : null;
+
+    if (!asset || !assignment) {
+      setDeleteError("Não existe atribuição ativa para este ativo.");
+      return;
+    }
+
+    const token = getAuthToken();
+
+    if (!token) {
+      setDeleteError("Sessão expirada. Faça login novamente.");
+      return;
+    }
+
+    setReturningDeleteAsset(true);
+    setDeleteError(null);
+    setDeleteInfo(null);
+
+    try {
+      await returnAssignment(assignment.id, {}, token);
+
+      setAssets((current) =>
+        current.map((item) =>
+          item.id === asset.id
+            ? { ...item, status: "ESTOQUE", locationId: null, location: null }
+            : item,
+        ),
+      );
+      setActiveAssignments((current) =>
+        current.filter((item) => item.id !== assignment.id),
+      );
+      setAssignmentRefreshKey((current) => current + 1);
+      setHistoryRefreshKey((current) => current + 1);
+      setDeleteInfo("Atribuição devolvida. Você já pode excluir o ativo.");
+      void reloadAssetData();
+      toast.success("Ativo devolvido com sucesso.");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Nao foi possivel devolver o ativo.";
+      setDeleteError(message);
+    } finally {
+      setReturningDeleteAsset(false);
+    }
+  }
+
+  async function handleConfirmDeleteAsset() {
+    const asset = assetPendingDelete;
+    if (!asset) return;
+
+    const token = getAuthToken();
+
+    if (!token) {
+      setDeleteError("Sessão expirada. Faça login novamente.");
+      return;
+    }
+
+    setDeleteLoading(true);
+    setDeleteError(null);
+    setDeleteInfo(null);
+
+    try {
+      const hasLinkedRecords =
+        (deleteImpact?.historyCount ?? 0) > 0 ||
+        (deleteImpact?.attachmentCount ?? 0) > 0;
+
+      await deleteAsset(
+        asset.id,
+        {
+          confirmed: hasLinkedRecords,
+        },
+        token,
+      );
+
+      setAssets((current) => current.filter((item) => item.id !== asset.id));
+      setActiveAssignments((current) =>
+        current.filter((item) => item.assetId !== asset.id),
+      );
+      setHistoryRefreshKey((current) => current + 1);
+      setAssignmentRefreshKey((current) => current + 1);
+      setAssetPendingDelete(null);
+      setDeleteImpact(null);
+      setDeleteError(null);
+      setDeleteInfo(null);
+      toast.success(`Ativo ${asset.internalCode} excluído com sucesso.`);
+    } catch (err: unknown) {
+      setDeleteError(deleteErrorMessage(err));
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
   function exportRows() {
     return sortedAssets.map((asset) => [
       asset.internalCode,
@@ -499,6 +736,12 @@ export default function AssetsList() {
       asset.brand,
       asset.model ?? "",
       asset.serialNumber ?? "",
+      formatDate(asset.purchaseDate),
+      asset.phoneNumber1 ?? "",
+      asset.phoneNumber2 ?? "",
+      asset.imei1 ?? "",
+      asset.imei2 ?? "",
+      asset.carrier ?? "",
       assetCategoryName(asset, categories),
       assetLocationName(asset, locations),
       labelStatus(asset.status),
@@ -507,71 +750,50 @@ export default function AssetsList() {
     ]);
   }
 
-  function exportFileName(format: ExportFormat) {
-    return `ativos-filtrados-${formatFileTimestamp()}.${format}`;
-  }
-
-  function exportCsv() {
-    const header = [
-      "codigo",
-      "tipo",
-      "marca",
-      "modelo",
-      "serial",
-      "categoria",
-      "localizacao",
-      "status",
-      "funcionario_atual",
-      "valor",
-    ];
-
-    const rows = [
-      header,
-      ...exportRows().map((row) => row.map(csvCell)),
-    ];
-
-    const csv = rows.map((row) => row.join(";")).join("\r\n");
-    const blob = new Blob([`\ufeff${csv}`], {
-      type: "text/csv;charset=utf-8",
-    });
-
-    downloadBlob(exportFileName("csv"), blob);
-    setExportOpen(false);
+  function exportFileName() {
+    return `ativos-filtrados-${formatFileTimestamp()}.xlsx`;
   }
 
   function exportXlsx() {
     const rows = [
       [
-        "codigo",
+        "código",
         "tipo",
         "marca",
         "modelo",
         "serial",
+        "data de compra",
+        "telefone 1",
+        "telefone 2",
+        "imei 1",
+        "imei 2",
+        "operadora",
         "categoria",
-        "localizacao",
+        "localização",
         "status",
-        "funcionario_atual",
+        "funcionário atual",
         "valor",
       ],
       ...exportRows(),
     ];
 
     const sheet = XLSX.utils.aoa_to_sheet(rows);
+    formatWorksheet(sheet, rows);
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Ativos");
     const buffer = XLSX.write(workbook, {
       bookType: "xlsx",
       type: "array",
+      cellStyles: true,
     });
 
     downloadBlob(
-      exportFileName("xlsx"),
+      exportFileName(),
       new Blob([buffer], {
-        type:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type: XLSX_MIME_TYPE,
       }),
     );
-    setExportOpen(false);
   }
 
   function handleSort(nextKey: SortKey) {
@@ -607,6 +829,14 @@ export default function AssetsList() {
     );
   }
 
+  const deleteModalActiveAssignment = assetPendingDelete
+    ? activeAssignmentByAssetId.get(assetPendingDelete.id) ?? null
+    : null;
+  const deleteModalHasLinkedRecords = Boolean(
+    deleteImpact &&
+      (deleteImpact.historyCount > 0 || deleteImpact.attachmentCount > 0),
+  );
+
   return (
     <AppShell
       current="assets"
@@ -621,35 +851,14 @@ export default function AssetsList() {
             </Link>
           ) : null}
           {canExportAssets ? (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setExportOpen((current) => !current)}
-                disabled={loading || redirecting || Boolean(error) || sortedAssets.length === 0}
-                className="btn-secondary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                Exportar
-              </button>
-
-              {exportOpen ? (
-                <div className="absolute right-0 z-20 mt-2 min-w-40 overflow-hidden rounded-[18px] border bg-[var(--surface-card)] p-1 shadow-[0_18px_40px_rgba(23,58,67,0.16)] [border-color:var(--border-soft)]">
-                  <button
-                    type="button"
-                    onClick={exportCsv}
-                    className="flex w-full items-center rounded-[14px] px-3 py-2 text-left text-sm [color:var(--text-primary)] hover:bg-[rgba(44,100,112,0.08)]"
-                  >
-                    CSV
-                  </button>
-                  <button
-                    type="button"
-                    onClick={exportXlsx}
-                    className="flex w-full items-center rounded-[14px] px-3 py-2 text-left text-sm [color:var(--text-primary)] hover:bg-[rgba(44,100,112,0.08)]"
-                  >
-                    Excel
-                  </button>
-                </div>
-              ) : null}
-            </div>
+            <button
+              type="button"
+              onClick={exportXlsx}
+              disabled={loading || redirecting || Boolean(error) || sortedAssets.length === 0}
+              className="btn-secondary px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Exportar XLSX
+            </button>
           ) : null}
 
           <div className="flex flex-wrap gap-2">
@@ -952,6 +1161,16 @@ export default function AssetsList() {
                                       >
                                         Editar
                                       </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenActionsMenuAssetId(null);
+                                          openDeleteModal(asset);
+                                        }}
+                                        className="action-button asset-actions-menu-item"
+                                      >
+                                        Excluir
+                                      </button>
                                     </>
                                   ) : null}
                                   <button
@@ -1118,6 +1337,120 @@ export default function AssetsList() {
                   }
                 }}
               />
+            ) : null}
+
+            {assetPendingDelete ? (
+              <div className="fixed inset-0 z-[99999]" onClick={closeDeleteModal}>
+                <div className="absolute inset-0 bg-[rgba(23,58,67,0.66)] backdrop-blur-[3px]" />
+
+                <div className="absolute inset-0 flex items-center justify-center p-4">
+                  <div
+                    className="glass-panel w-full max-w-lg overflow-hidden rounded-[30px]"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between border-b px-6 py-5 [border-color:var(--border-soft)]">
+                      <div>
+                        <p className="eyebrow">Exclusão</p>
+                        <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em] [color:var(--text-primary)]">
+                          Excluir ativo
+                        </h2>
+                        <p className="mt-1 text-sm [color:var(--text-secondary)]">
+                          {assetPendingDelete.internalCode}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={closeDeleteModal}
+                        disabled={deleteLoading || returningDeleteAsset}
+                        className="btn-secondary px-3 py-2 text-sm disabled:opacity-50"
+                      >
+                        Fechar
+                      </button>
+                    </div>
+
+                    <div className="space-y-4 px-6 py-5">
+                      <div className="surface-soft rounded-[24px] px-4 py-4">
+                        <div className="font-semibold [color:var(--text-primary)]">
+                          {assetPendingDelete.brand}{" "}
+                          {assetPendingDelete.model ?? ""}
+                        </div>
+                        <div className="mt-1 text-sm [color:var(--text-secondary)]">
+                          {labelType(assetPendingDelete.type)} |{" "}
+                          {assetPendingDelete.serialNumber ?? "Sem serial"}
+                        </div>
+                      </div>
+
+                      <div className="text-sm [color:var(--text-secondary)]">
+                        Confirme para remover este ativo do inventário. Essa ação não
+                        pode ser desfeita.
+                      </div>
+
+                      <div className="status-banner-warning rounded-[22px] px-4 py-3 text-sm">
+                        Alternativa: altere o status para Baixado para manter o
+                        registro no inventário.
+                      </div>
+
+                      {deleteImpactLoading ? (
+                        <div className="surface-soft rounded-[22px] px-4 py-3 text-sm [color:var(--text-secondary)]">
+                          Verificando histórico e anexos...
+                        </div>
+                      ) : deleteModalHasLinkedRecords && deleteImpact ? (
+                        <div className="status-banner-warning rounded-[22px] px-4 py-3 text-sm">
+                          Este ativo possui {deleteImpact.historyCount} histórico(s)
+                          de atribuição e {deleteImpact.attachmentCount} anexo(s).
+                          Eles serão removidos junto com o ativo.
+                        </div>
+                      ) : null}
+
+                      {deleteInfo ? (
+                        <div className="status-banner-warning rounded-[22px] px-4 py-3 text-sm">
+                          {deleteInfo}
+                        </div>
+                      ) : null}
+
+                      {deleteError ? (
+                        <div className="status-banner-warning whitespace-pre-line rounded-[22px] px-4 py-3 text-sm">
+                          {deleteError}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="flex flex-col gap-2 border-t px-6 py-5 [border-color:var(--border-soft)] sm:flex-row sm:items-center sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={closeDeleteModal}
+                        disabled={deleteLoading || returningDeleteAsset}
+                        className="btn-secondary px-4 py-3 text-sm disabled:opacity-50"
+                      >
+                        Fechar
+                      </button>
+
+                      {deleteModalActiveAssignment ? (
+                        <button
+                          type="button"
+                          onClick={handleReturnFromDeleteModal}
+                          disabled={deleteLoading || returningDeleteAsset}
+                          className="btn-secondary px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {returningDeleteAsset
+                            ? "Devolvendo..."
+                            : "Devolver ativo"}
+                        </button>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={handleConfirmDeleteAsset}
+                        disabled={deleteLoading || returningDeleteAsset || deleteImpactLoading}
+                        className="btn-danger px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {deleteLoading ? "Excluindo..." : "Excluir"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : null}
           </section>
     </AppShell>

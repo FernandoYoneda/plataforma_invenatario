@@ -21,6 +21,7 @@ const TYPES: { value: AssetType; label: string }[] = [
   { value: "MONITOR", label: "Monitor" },
   { value: "MOUSE", label: "Mouse" },
   { value: "TECLADO", label: "Teclado" },
+  { value: "SMARTPHONE", label: "Smartphone" },
   { value: "OUTRO", label: "Outro" },
 ];
 
@@ -42,6 +43,15 @@ function parseBRLToCents(input: string): number | null {
   return Math.round(value * 100);
 }
 
+function normalizeImei(input: string) {
+  return input.replace(/\D/g, "");
+}
+
+function isValidOptionalImei(input: string) {
+  const digits = normalizeImei(input);
+  return digits.length === 0 || digits.length === 15;
+}
+
 export default function NewAssetModal({
   onCreated,
 }: {
@@ -59,6 +69,12 @@ export default function NewAssetModal({
   const [serialNumber, setSerialNumber] = useState("");
   const [status, setStatus] = useState<AssetStatus>("ESTOQUE");
   const [valueBRL, setValueBRL] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState("");
+  const [phoneNumber1, setPhoneNumber1] = useState("");
+  const [phoneNumber2, setPhoneNumber2] = useState("");
+  const [imei1, setImei1] = useState("");
+  const [imei2, setImei2] = useState("");
+  const [carrier, setCarrier] = useState("");
   const [notes, setNotes] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [locationId, setLocationId] = useState("");
@@ -158,6 +174,7 @@ export default function NewAssetModal({
   const valueCents = useMemo(() => parseBRLToCents(valueBRL), [valueBRL]);
   const needsValue =
     type === "DESKTOP" || type === "NOTEBOOK" || type === "MONITOR";
+  const isSmartphone = type === "SMARTPHONE";
 
   function close() {
     if (!loading) {
@@ -172,6 +189,12 @@ export default function NewAssetModal({
     setSerialNumber("");
     setStatus("ESTOQUE");
     setValueBRL("");
+    setPurchaseDate("");
+    setPhoneNumber1("");
+    setPhoneNumber2("");
+    setImei1("");
+    setImei2("");
+    setCarrier("");
     setNotes("");
     setCategoryId("");
     setLocationId("");
@@ -196,6 +219,13 @@ export default function NewAssetModal({
       return;
     }
 
+    if (isSmartphone && (!isValidOptionalImei(imei1) || !isValidOptionalImei(imei2))) {
+      const message = "IMEI deve conter exatamente 15 digitos.";
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -215,6 +245,16 @@ export default function NewAssetModal({
           valueCents: needsValue
             ? (valueCents as number)
             : (valueCents ?? null),
+          purchaseDate: purchaseDate || null,
+          ...(isSmartphone
+            ? {
+                phoneNumber1: phoneNumber1.trim() || null,
+                phoneNumber2: phoneNumber2.trim() || null,
+                imei1: normalizeImei(imei1) || null,
+                imei2: normalizeImei(imei2) || null,
+                carrier: carrier.trim() || null,
+              }
+            : {}),
           notes: notes.trim() || null,
           ...(categoryId ? { categoryId } : {}),
           ...(locationId ? { locationId } : {}),
@@ -399,6 +439,86 @@ export default function NewAssetModal({
                     placeholder="3500,00"
                   />
                 </label>
+
+                <label className="text-sm">
+                  <span className="font-medium [color:var(--text-primary)]">
+                    Data de compra
+                  </span>
+                  <input
+                    type="date"
+                    value={purchaseDate}
+                    onChange={(event) => setPurchaseDate(event.target.value)}
+                    className="brand-input mt-1.5"
+                  />
+                </label>
+
+                {isSmartphone ? (
+                  <>
+                    <label className="text-sm">
+                      <span className="font-medium [color:var(--text-primary)]">
+                        Telefone 1
+                      </span>
+                      <input
+                        value={phoneNumber1}
+                        onChange={(event) => setPhoneNumber1(event.target.value)}
+                        className="brand-input mt-1.5"
+                        placeholder="(11) 99999-9999"
+                      />
+                    </label>
+
+                    <label className="text-sm">
+                      <span className="font-medium [color:var(--text-primary)]">
+                        Telefone 2
+                      </span>
+                      <input
+                        value={phoneNumber2}
+                        onChange={(event) => setPhoneNumber2(event.target.value)}
+                        className="brand-input mt-1.5"
+                        placeholder="(11) 99999-9999"
+                      />
+                    </label>
+
+                    <label className="text-sm">
+                      <span className="font-medium [color:var(--text-primary)]">
+                        IMEI 1
+                      </span>
+                      <input
+                        value={imei1}
+                        onChange={(event) => setImei1(event.target.value)}
+                        className="brand-input mt-1.5"
+                        inputMode="numeric"
+                        maxLength={15}
+                        placeholder="15 digitos"
+                      />
+                    </label>
+
+                    <label className="text-sm">
+                      <span className="font-medium [color:var(--text-primary)]">
+                        IMEI 2
+                      </span>
+                      <input
+                        value={imei2}
+                        onChange={(event) => setImei2(event.target.value)}
+                        className="brand-input mt-1.5"
+                        inputMode="numeric"
+                        maxLength={15}
+                        placeholder="15 digitos"
+                      />
+                    </label>
+
+                    <label className="text-sm sm:col-span-2">
+                      <span className="font-medium [color:var(--text-primary)]">
+                        Operadora
+                      </span>
+                      <input
+                        value={carrier}
+                        onChange={(event) => setCarrier(event.target.value)}
+                        className="brand-input mt-1.5"
+                        placeholder="Vivo, Claro, TIM..."
+                      />
+                    </label>
+                  </>
+                ) : null}
 
                 <label className="text-sm sm:col-span-2">
                   <span className="font-medium [color:var(--text-primary)]">
